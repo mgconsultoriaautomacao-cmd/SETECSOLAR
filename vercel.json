@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "name": "setecsolar",
   "builds": [
     {
       "src": "backend/src/main.ts",
