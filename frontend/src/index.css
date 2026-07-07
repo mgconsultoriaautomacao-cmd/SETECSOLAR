@@ -1,0 +1,72 @@
+@import "tailwindcss";
+:root {
+  /* SolarZ Reference Colors */
+  --color-bg-dark: #121418;
+  --color-bg-panel: #1e2227;
+  --color-bg-panel-transparent: rgba(30, 34, 39, 0.85);
+  
+  --color-primary-orange: #ff6b00;
+  --color-primary-orange-hover: #e66000;
+  
+  --color-text-main: #f0f0f0;
+  --color-text-muted: #8b929c;
+  
+  --color-border: #2d333b;
+  
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --font-family-base: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+[data-theme="light"] {
+  --color-bg-dark: #f1f5f9;
+  --color-bg-panel: #ffffff;
+  --color-bg-panel-transparent: rgba(255, 255, 255, 0.9);
+  --color-text-main: #0f172a;
+  --color-text-muted: #64748b;
+  --color-border: #e2e8f0;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family-base);
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-main);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* Custom Scrollbar for Web */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-dark); 
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border); 
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted); 
+}

@@ -1,0 +1,227 @@
+.layout-container {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--color-bg-dark);
+}
+
+/* ─── Sidebar Desktop ─────────────────────────────────────── */
+.sidebar-drawer {
+  width: 260px;
+  flex-shrink: 0;
+  display: flex;
+}
+
+.sidebar-content {
+  width: 100%;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background-color: var(--color-bg-panel);
+  color: var(--color-text-main);
+  border-right: 1px solid var(--color-border);
+  overflow-y: auto;
+}
+
+.sidebar-logo-container {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar-logo {
+  height: 60px;
+  width: auto;
+  object-fit: contain;
+  mix-blend-mode: screen;
+}
+
+.sidebar-menu {
+  padding: 8px 12px;
+  margin-top: 12px;
+  list-style: none;
+}
+
+.sidebar-menu-item {
+  margin-bottom: 2px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 8px;
+  transition: background-color 0.15s, color 0.15s;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  user-select: none;
+}
+
+.sidebar-link:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: var(--color-text-main);
+}
+
+.sidebar-link.active {
+  background-color: var(--color-primary-orange);
+  color: #fff;
+}
+
+.sidebar-link-icon {
+  margin-right: 14px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.sidebar-link.active .sidebar-link-icon,
+.sidebar-link.active .sidebar-link-text {
+  color: #fff;
+}
+
+.sidebar-link-text {
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sidebar-link.active .sidebar-link-text {
+  font-weight: 700;
+}
+
+.sidebar-footer {
+  padding: 16px 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.sidebar-logout {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-danger);
+  transition: background-color 0.15s;
+  user-select: none;
+}
+
+.sidebar-logout:hover {
+  background-color: rgba(239, 68, 68, 0.08);
+}
+
+/* ─── Barra do Topo ───────────────────────────────────────── */
+.app-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 260px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  background-color: var(--color-bg-panel-transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--color-border);
+  z-index: 900;
+}
+
+.app-bar-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.app-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Botão hamburguer — escondido no desktop */
+.mobile-menu-btn {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 6px;
+  border-radius: 6px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.mobile-menu-btn:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-main);
+}
+
+/* ─── Área de conteúdo principal ─────────────────────────── */
+.main-content {
+  flex-grow: 1;
+  padding: 24px;
+  margin-top: 60px;
+  min-height: calc(100vh - 60px);
+  background-color: var(--color-bg-dark);
+  min-width: 0; /* evita overflow em flex */
+}
+
+/* ─── Drawer mobile (oculto por padrão) ──────────────────── */
+.mobile-drawer {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 270px;
+  height: 100vh;
+  z-index: 1100;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+}
+
+.mobile-drawer.open {
+  transform: translateX(0);
+}
+
+/* Overlay escuro */
+.mobile-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  z-index: 1050;
+  backdrop-filter: blur(2px);
+}
+
+/* ─── Mobile (≤ 900px) ────────────────────────────────────── */
+@media (max-width: 900px) {
+  .sidebar-drawer {
+    display: none;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobile-drawer {
+    display: flex;
+  }
+
+  .mobile-overlay {
+    display: block;
+  }
+
+  .app-bar {
+    left: 0;
+    padding: 0 16px;
+  }
+
+  .main-content {
+    padding: 16px;
+  }
+}

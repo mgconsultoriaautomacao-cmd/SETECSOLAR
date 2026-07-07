@@ -1,0 +1,108 @@
+.tickets-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.tickets-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.links-group {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.link-item {
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding-bottom: 2px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.link-item.active {
+  color: var(--color-primary-orange);
+  border-bottom-color: var(--color-primary-orange);
+}
+
+.link-item:hover {
+  color: var(--color-text-main);
+}
+
+.tickets-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background-color: var(--color-bg-panel);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+
+.tickets-tabs {
+  display: flex;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.tickets-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tickets-tab.active {
+  color: white;
+  background-color: var(--color-primary-orange);
+  border-radius: 4px;
+}
+
+.tickets-tab-badge {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: white;
+}
+
+.tickets-tab:not(.active) .tickets-tab-badge {
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+}
+
+.tickets-tab.active .tickets-tab-badge {
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--color-text-main);
+  padding: 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.2s;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}

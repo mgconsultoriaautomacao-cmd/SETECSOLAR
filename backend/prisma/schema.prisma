@@ -1,0 +1,209 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+enum Role {
+  SUPER_ADMIN
+  GESTOR
+  OPERADOR
+  TECNICO
+  CLIENTE
+}
+
+enum ClientStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum UsinaStatus {
+  ONLINE
+  ALERT
+  OFFLINE
+  CRITICAL
+}
+
+enum OSStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CLIENT
+  COMPLETED
+  CANCELLED
+}
+
+enum OSPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ServiceType {
+  PREVENTIVA
+  CORRETIVA
+  EMERGENCIA
+  LIMPEZA
+  OUTROS
+}
+
+enum TicketCategory {
+  MONITORING
+  INVERTER
+  PANELS
+  CLEANING
+  INVOICE
+  OTHERS
+}
+
+enum TicketStatus {
+  OPEN
+  ANALYSING
+  IN_PROGRESS
+  COMPLETED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(CLIENTE)
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relacionamentos
+  clientProfile Client?    @relation("UserToClient")
+  assignedOSs   WorkOrder[] @relation("TechnicianToOS")
+}
+
+model Client {
+  id               String       @id @default(uuid())
+  name             String
+  document         String       @unique // CPF/CNPJ
+  phone            String
+  whatsapp         String
+  email            String       @unique
+  zipCode          String
+  address          String
+  city             String
+  state            String
+  installationDate DateTime
+  status           ClientStatus @default(ACTIVE)
+  gpsLatitude      Float?
+  gpsLongitude     Float?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  // Vinculo com usuário para acesso ao PWA
+  userId String? @unique
+  user   User?   @relation("UserToClient", fields: [userId], references: [id], onDelete: SetNull)
+
+  // Relacionamentos
+  usinas      Usina[]
+  workOrders  WorkOrder[]
+  tickets     Ticket[]
+}
+
+model Usina {
+  id               String      @id @default(uuid())
+  name             String
+  clientId         String
+  client           Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  capacityKwp      Float       // kWp instalado
+  inverterCapacity Float       // Potência do inversor
+  moduleCount      Int         // Quantidade de módulos
+  manufacturer     String      // Fabricante
+  model            String      // Modelo
+  gpsLatitude      Float?
+  gpsLongitude     Float?
+  utilityCompany   String      // Distribuidora
+  estimatedKwh     Float       // kWh projetado
+  paybackYears     Float       // Payback previsto em anos
+  installationDate DateTime
+  approvalDate     DateTime?   // Data de homologação
+  status           UsinaStatus @default(OFFLINE)
+  datalogger       String      @default("")
+  address          String      @default("")
+  city             String      @default("")
+  state            String      @default("")
+  minEnergyPeak    Float       @default(0)
+  maxEnergyPeak    Float       @default(0)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  // Relacionamentos
+  invoices    Invoice[]
+  workOrders  WorkOrder[]
+}
+
+model Invoice {
+  id             String   @id @default(uuid())
+  usinaId        String
+  usina          Usina    @relation(fields: [usinaId], references: [id], onDelete: Cascade)
+  competence     String   // Ex: "05/2026"
+  consumptionKwh Float    // Consumo kWh
+  generationKwh  Float    // Geração kWh
+  amount         Float    // Valor da conta R$
+  savings        Float    // Economia obtida R$
+  pdfUrl         String?  // Caminho do PDF
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model WorkOrder {
+  id           String      @id @default(uuid())
+  number       Int         @unique @default(1)
+  clientId     String
+  client       Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  usinaId      String
+  usina        Usina       @relation(fields: [usinaId], references: [id], onDelete: Cascade)
+  description  String
+  priority     OSPriority  @default(MEDIUM)
+  status       OSStatus    @default(OPEN)
+  technicianId String?
+  technician   User?       @relation("TechnicianToOS", fields: [technicianId], references: [id], onDelete: SetNull)
+  serviceType  ServiceType @default(CORRETIVA)
+  scheduledAt  DateTime?
+  completedAt  DateTime?
+  notes        String?
+  internalNotes String?
+  laborCost    Float?      @default(0)
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  // Relacionamentos
+  parts        WorkOrderPart[]
+  tickets      Ticket[]
+}
+
+model WorkOrderPart {
+  id          String    @id @default(uuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float     @default(1)
+  unit        String    @default("un")
+  unitCost    Float     @default(0)
+  createdAt   DateTime  @default(now())
+}
+
+model Ticket {
+  id          String         @id @default(uuid())
+  clientId    String
+  client      Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  category    TicketCategory
+  title       String
+  description String
+  status      TicketStatus   @default(OPEN)
+  resolution  String?
+  workOrderId String?
+  workOrder   WorkOrder?     @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}

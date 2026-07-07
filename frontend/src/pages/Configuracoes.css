@@ -1,0 +1,343 @@
+/* ── Configurações – Layout Geral ─────────────────────────────────────── */
+.config-root {
+  display: flex;
+  height: 100%;
+  min-height: calc(100vh - 64px);
+  gap: 0;
+  background: var(--color-bg-dark);
+}
+
+/* ── Sidebar de Navegação das Configurações ─────────────────────────── */
+.config-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background-color: var(--color-bg-panel);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.config-user-info {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.config-user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-main);
+  display: block;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.config-user-email {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.config-nav {
+  flex: 1;
+  padding: 8px 0;
+  list-style: none;
+  margin: 0;
+}
+
+.config-nav-item {
+  position: relative;
+}
+
+.config-nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s, background 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.config-nav-btn:hover {
+  color: var(--color-text-main);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.config-nav-btn.active {
+  color: var(--color-primary-orange);
+  border-left-color: var(--color-primary-orange);
+  background: rgba(255, 107, 0, 0.06);
+  font-weight: 600;
+}
+
+.config-nav-btn.locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.config-nav-icon {
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+}
+
+/* ── Conteúdo Principal ───────────────────────────────────────────────── */
+.config-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+}
+
+.config-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.config-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text-main);
+  margin: 0 0 4px;
+}
+
+.config-subtitle {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ── Cards de Predefinição ─────────────────────────────────────────────── */
+.predef-card {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.predef-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  background: rgba(255, 107, 0, 0.03);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.predef-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-main);
+}
+
+.predef-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.predef-card-body {
+  padding: 20px;
+}
+
+.predef-meta {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.predef-meta-item {
+  font-size: 13px;
+  color: var(--color-primary-orange);
+  font-weight: 500;
+}
+
+.predef-default-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-primary-orange);
+  font-weight: 500;
+}
+
+.predef-months-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-main);
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+.predef-months-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 24px;
+}
+
+.predef-month-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.predef-month-label {
+  color: var(--color-text-main);
+  min-width: 70px;
+  font-weight: 500;
+}
+
+.predef-month-value {
+  color: var(--color-primary-orange);
+  font-weight: 600;
+}
+
+/* ── Seção de Perfil ─────────────────────────────────────────────────── */
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.profile-card {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.profile-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-main);
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.profile-avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--color-primary-orange);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.profile-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* ── Seção Preferências ─────────────────────────────────────────────── */
+.pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pref-row:last-child {
+  border-bottom: none;
+}
+
+.pref-info h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-main);
+  margin: 0 0 4px;
+}
+
+.pref-info p {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ── Toggle Switch ─────────────────────────────────────────────────── */
+.toggle-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  width: 44px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: var(--color-border);
+  border-radius: 24px;
+  transition: background-color 0.2s;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  top: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--color-primary-orange);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* ── Modal de Predefinição ─────────────────────────────────────────── */
+.predef-modal-months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
