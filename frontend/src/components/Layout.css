@@ -37,7 +37,15 @@
   height: 60px;
   width: auto;
   object-fit: contain;
+}
+
+[data-theme="dark"] .sidebar-logo {
   mix-blend-mode: screen;
+}
+
+[data-theme="light"] .sidebar-logo {
+  filter: invert(1);
+  mix-blend-mode: multiply;
 }
 
 .sidebar-menu {

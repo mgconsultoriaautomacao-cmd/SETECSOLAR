@@ -209,6 +209,41 @@ function parseRegisters(regs: number[]): Partial<DeviceReading> {
   };
 }
 
+// Helper para parsear e limpar o Serial Number (SN) do datalogger de forma robusta
+export function parseSnToNumber(sn: string): number {
+  if (!sn) return NaN;
+  const cleanSn = sn.trim();
+  let val = NaN;
+
+  // 1. Tenta parse simples como decimal
+  if (/^\d+$/.test(cleanSn)) {
+    val = parseInt(cleanSn, 10);
+  }
+  // 2. Se for hexadecimal (com ou sem 0x), tenta base 16
+  else if (/^(0x)?[0-9a-fA-F]+$/.test(cleanSn)) {
+    val = parseInt(cleanSn.replace(/^0x/, ''), 16);
+  }
+  // 3. Extrai apenas dígitos se for alfanumérico (ex: LSW3_15_2375000001 -> 2375000001)
+  else {
+    const match = cleanSn.match(/(\d+)$/);
+    if (match) {
+      val = parseInt(match[1], 10);
+    }
+    if (isNaN(val)) {
+      const digitsOnly = cleanSn.replace(/\D/g, '');
+      if (digitsOnly) {
+        val = parseInt(digitsOnly, 10);
+      }
+    }
+  }
+
+  // Coerção para 32-bit uint se for um número válido (previne estouro em writeUInt32LE)
+  if (!isNaN(val)) {
+    return val >>> 0;
+  }
+  return NaN;
+}
+
 // ─── Service Principal ────────────────────────────────────────────────────────
 
 @Injectable()
@@ -281,7 +316,7 @@ export class SolarmanService implements OnModuleInit {
     }
 
     const [ip, snStr] = datalogger.split(':');
-    const serialNumber = parseInt(snStr, 10);
+    const serialNumber = parseSnToNumber(snStr);
 
     if (!ip || isNaN(serialNumber)) {
       return {
@@ -362,9 +397,9 @@ export class SolarmanService implements OnModuleInit {
       return { success: false, message: 'IP e SN são obrigatórios.' };
     }
 
-    const serialNumber = parseInt(sn, 10);
+    const serialNumber = parseSnToNumber(sn);
     if (isNaN(serialNumber)) {
-      return { success: false, message: 'SN inválido. Deve ser um número (ex: 2375000001).' };
+      return { success: false, message: 'SN inválido. Deve ser um número ou conter dígitos válidos (ex: 2375000001).' };
     }
 
     this.logger.log(`🔍 Testando conexão: ${ip}:8899 (SN: ${serialNumber})`);

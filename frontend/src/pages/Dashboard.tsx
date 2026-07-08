@@ -23,6 +23,9 @@ import InboxIcon from '@mui/icons-material/Inbox';
 import WifiOffIcon from '@mui/icons-material/WifiOff';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import LayersIcon from '@mui/icons-material/Layers';
 
 type StatusFilter = 'Todos' | 'Normal' | 'Com alerta' | 'Crítico' | 'Desconhecido';
 
@@ -30,6 +33,7 @@ export default function Dashboard() {
   const { clients, usinas } = useApp();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<StatusFilter>('Todos');
+  const [mapTheme, setMapTheme] = useState<'dark' | 'light' | 'satellite'>('dark');
 
   // Centro do mapa: média das coordenadas das usinas, ou Brasil
   const mapCenter: [number, number] = usinas.length > 0
@@ -83,11 +87,22 @@ export default function Dashboard() {
   return (
     <div className="dashboard-container">
       {/* Mapa de fundo */}
-      <div className="dashboard-map">
+      <div className={`dashboard-map map-${mapTheme}`}>
         <MapContainer center={mapCenter} zoom={total > 0 ? 6 : 4} style={{ height: '100%', width: '100%' }} zoomControl={false}>
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            key={mapTheme}
+            attribution={
+              mapTheme === 'satellite'
+                ? 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            }
+            url={
+              mapTheme === 'satellite'
+                ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                : mapTheme === 'light'
+                ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            }
           />
           {usinas.map(u => {
             const lat = u.gpsLatitude ?? -14.235;
@@ -212,6 +227,31 @@ export default function Dashboard() {
             </div>
           </div>
 
+        </div>
+
+        {/* Botões do tema do mapa */}
+        <div className="map-theme-control">
+          <button
+            type="button"
+            className={`map-theme-btn ${mapTheme === 'dark' ? 'active' : ''}`}
+            onClick={() => setMapTheme('dark')}
+          >
+            <DarkModeIcon sx={{ fontSize: 16 }} /> Escuro
+          </button>
+          <button
+            type="button"
+            className={`map-theme-btn ${mapTheme === 'light' ? 'active' : ''}`}
+            onClick={() => setMapTheme('light')}
+          >
+            <LightModeIcon sx={{ fontSize: 16 }} /> Claro
+          </button>
+          <button
+            type="button"
+            className={`map-theme-btn ${mapTheme === 'satellite' ? 'active' : ''}`}
+            onClick={() => setMapTheme('satellite')}
+          >
+            <LayersIcon sx={{ fontSize: 16 }} /> Satélite
+          </button>
         </div>
 
         {/* Tabela de usinas */}

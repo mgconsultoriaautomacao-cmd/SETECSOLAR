@@ -564,7 +564,13 @@ function AppCliente() {
           simulatorTheme === 'light' ? 'bg-white/90 border-slate-100/80' : 'bg-slate-900/90 border-slate-800/80'
         } sticky top-0 z-20 backdrop-blur-md transition-colors`}>
           <div className="flex items-center gap-2">
-            <img src={logoSetec} alt="SETEC" className="h-7 w-auto mix-blend-screen" />
+            <img 
+              src={logoSetec} 
+              alt="SETEC" 
+              className={`h-7 w-auto ${
+                simulatorTheme === 'light' ? 'mix-blend-multiply invert' : 'mix-blend-screen'
+              }`} 
+            />
             <span className="font-extrabold text-orange-500 tracking-wider text-sm">SETEC CLIENTE</span>
           </div>
 
