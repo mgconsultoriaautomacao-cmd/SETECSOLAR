@@ -382,6 +382,37 @@ export class SolarmanService implements OnModuleInit {
     }
 
     const [ip, snStr] = datalogger.split(':');
+
+    // MOCK MODE FALLBACK: Se o S/N contiver a palavra "MOCK" ou for "0", gera dados fictícios realistas
+    if (snStr && (snStr.toUpperCase().includes('MOCK') || snStr === '0')) {
+      const now = new Date();
+      const hour = now.getHours();
+      let powerNow = 0;
+      
+      // Curva solar simples senoidal entre 6h e 18h
+      if (hour >= 6 && hour <= 18) {
+        const peakPower = 5.4; // 5.4 kW de pico
+        const rad = ((hour - 6) / 12) * Math.PI;
+        powerNow = peakPower * Math.sin(rad) * (0.9 + Math.random() * 0.2); // com oscilação de nuvens
+      }
+      
+      const generationToday = powerNow > 0 ? (powerNow * (hour - 6) * 0.7) : 0;
+      const generationTotal = 4580.2 + generationToday;
+
+      return {
+        usinaId, usinaNome, deviceSn: snStr, ipAddress: ip || '127.0.0.1',
+        powerNow: parseFloat(powerNow.toFixed(2)),
+        generationToday: parseFloat(generationToday.toFixed(1)),
+        generationTotal: parseFloat(generationTotal.toFixed(1)),
+        gridVoltage: parseFloat((220 + (Math.random() - 0.5) * 4).toFixed(1)),
+        gridFrequency: parseFloat((60 + (Math.random() - 0.5) * 0.2).toFixed(2)),
+        temperature: parseFloat((32 + powerNow * 2 + (Math.random() - 0.5) * 2).toFixed(1)),
+        dcPower: parseFloat((powerNow * 1.1).toFixed(2)),
+        status: 'ONLINE',
+        lastUpdate: new Date(),
+      };
+    }
+
     const serialNumber = parseSnToNumber(snStr);
 
     if (!ip || isNaN(serialNumber)) {
@@ -486,6 +517,34 @@ export class SolarmanService implements OnModuleInit {
   }> {
     if (!ip || !sn) {
       return { success: false, message: 'IP e SN são obrigatórios.' };
+    }
+
+    // MOCK MODE FALLBACK: Se o S/N contiver a palavra "MOCK" ou for "0", gera dados fictícios realistas
+    if (sn && (sn.toUpperCase().includes('MOCK') || sn === '0')) {
+      const now = new Date();
+      const hour = now.getHours();
+      let powerNow = 0;
+      if (hour >= 6 && hour <= 18) {
+        const rad = ((hour - 6) / 12) * Math.PI;
+        powerNow = 5.4 * Math.sin(rad) * (0.9 + Math.random() * 0.2);
+      }
+      const generationToday = powerNow > 0 ? (powerNow * (hour - 6) * 0.7) : 0;
+      const generationTotal = 4580.2 + generationToday;
+
+      return {
+        success: true,
+        message: `✅ Datalogger MOCK conectado com sucesso (Modo Simulação)!`,
+        discoveredIp: ip,
+        data: {
+          powerNow: parseFloat(powerNow.toFixed(2)),
+          generationToday: parseFloat(generationToday.toFixed(1)),
+          generationTotal: parseFloat(generationTotal.toFixed(1)),
+          gridVoltage: parseFloat((220 + (Math.random() - 0.5) * 4).toFixed(1)),
+          gridFrequency: parseFloat((60 + (Math.random() - 0.5) * 0.2).toFixed(2)),
+          temperature: parseFloat((32 + powerNow * 2 + (Math.random() - 0.5) * 2).toFixed(1)),
+          status: 'ONLINE',
+        }
+      };
     }
 
     const serialNumber = parseSnToNumber(sn);
