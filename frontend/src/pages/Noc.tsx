@@ -25,6 +25,9 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ElectricMeterIcon from '@mui/icons-material/ElectricMeter';
 import SignalWifiOffIcon from '@mui/icons-material/SignalWifiOff';
 import RouterIcon from '@mui/icons-material/Router';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
+import LayersIcon from '@mui/icons-material/Layers';
 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -90,6 +93,7 @@ export default function Noc() {
   const [readings, setReadings] = useState<DeviceReading[]>([]);
   const [events, setEvents] = useState<NocEvent[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING' | 'OK'>('ALL');
+  const [mapTheme, setMapTheme] = useState<'dark' | 'light' | 'satellite'>('dark');
   const [isFetching, setIsFetching] = useState(false);
   const [lastFetch, setLastFetch] = useState('');
   const [solarmanConfigured, setSolarmanConfigured] = useState<boolean | null>(null);
@@ -173,8 +177,19 @@ export default function Noc() {
   useEffect(() => {
     if (mapRef.current && !leafletMapRef.current) {
       const map = L.map(mapRef.current, { zoomControl: true }).setView([-21.9064, -45.0616], 6);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
+      
+      const url = mapTheme === 'satellite'
+        ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+        : mapTheme === 'light'
+        ? 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'
+        : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+      const attr = mapTheme === 'satellite'
+        ? 'Tiles &copy; Esri &mdash; Source: Esri'
+        : '&copy; OpenStreetMap &copy; CARTO';
+
+      L.tileLayer(url, {
+        attribution: attr,
         subdomains: 'abcd',
         maxZoom: 20,
       }).addTo(map);
@@ -183,7 +198,7 @@ export default function Noc() {
     return () => {
       if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; }
     };
-  }, []);
+  }, [mapTheme]);
 
   // ── Mapa — atualiza markers quando usinas ou readings mudam ─────────────
   useEffect(() => {
@@ -220,7 +235,7 @@ export default function Noc() {
         </div>
       `);
     });
-  }, [usinas, readings]);
+  }, [usinas, readings, mapTheme]);
 
   // ── Helpers de UI ────────────────────────────────────────────────────────
   const getEventIcon = (type: NocEvent['type']) => {
@@ -355,8 +370,84 @@ export default function Noc() {
                 ))}
               </Box>
             </Box>
-            <Box sx={{ flex: 1, bgcolor: '#020617', borderRadius: 2, overflow: 'hidden', border: '1px solid #1e293b' }}>
+            <Box sx={{ flex: 1, bgcolor: '#020617', borderRadius: 2, overflow: 'hidden', border: '1px solid #1e293b', position: 'relative' }}>
               <div ref={mapRef} style={{ width: '100%', height: '100%', minHeight: 380 }} />
+              
+              {/* Botões do tema do mapa */}
+              <Box sx={{
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                display: 'flex',
+                gap: '4px',
+                bgcolor: 'rgba(30, 41, 59, 0.75)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid #334155',
+                borderRadius: '8px',
+                p: '4px',
+                zIndex: 1000,
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setMapTheme('dark')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    color: mapTheme === 'dark' ? '#fff' : '#94a3b8',
+                    backgroundColor: mapTheme === 'dark' ? '#ff6b00' : 'transparent',
+                    border: 'none',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <DarkModeIcon sx={{ fontSize: 14 }} /> Escuro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTheme('light')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    color: mapTheme === 'light' ? '#fff' : '#94a3b8',
+                    backgroundColor: mapTheme === 'light' ? '#ff6b00' : 'transparent',
+                    border: 'none',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <LightModeIcon sx={{ fontSize: 14 }} /> Claro
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapTheme('satellite')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    color: mapTheme === 'satellite' ? '#fff' : '#94a3b8',
+                    backgroundColor: mapTheme === 'satellite' ? '#ff6b00' : 'transparent',
+                    border: 'none',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <LayersIcon sx={{ fontSize: 14 }} /> Satélite
+                </button>
+              </Box>
             </Box>
           </Paper>
         </Grid>

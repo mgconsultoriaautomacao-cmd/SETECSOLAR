@@ -244,6 +244,72 @@ export function parseSnToNumber(sn: string): number {
   return NaN;
 }
 
+// Realiza uma varredura paralela rápida na subrede local para encontrar a porta 8899 aberta e valida o S/N
+async function scanSubnetForStick(
+  subnetBase: string,
+  serialNumber: number,
+  logger: Logger,
+): Promise<string | null> {
+  const net = require('net');
+  const timeout = 300; // 300ms de timeout na rede local
+  const promises: Promise<{ ip: string; success: boolean }>[] = [];
+
+  logger.log(`🔍 Iniciando varredura rápida na subrede ${subnetBase}x (porta 8899) para encontrar o datalogger...`);
+
+  // Varredura de 1 a 254
+  for (let i = 1; i <= 254; i++) {
+    const ip = `${subnetBase}${i}`;
+    const p = new Promise<{ ip: string; success: boolean }>((resolve) => {
+      const socket = new net.Socket();
+      socket.setTimeout(timeout);
+
+      socket.on('connect', () => {
+        socket.destroy();
+        resolve({ ip, success: true });
+      });
+
+      socket.on('error', () => {
+        socket.destroy();
+        resolve({ ip, success: false });
+      });
+
+      socket.on('timeout', () => {
+        socket.destroy();
+        resolve({ ip, success: false });
+      });
+
+      socket.connect(8899, ip);
+    });
+    promises.push(p);
+  }
+
+  const results = await Promise.all(promises);
+  const activeIps = results.filter(r => r.success).map(r => r.ip);
+
+  if (activeIps.length === 0) {
+    logger.warn(`  Varredura concluída. Nenhum dispositivo respondendo na porta 8899.`);
+    return null;
+  }
+
+  logger.log(`  Dispositivos encontrados com porta 8899 ativa: [${activeIps.join(', ')}]. Testando o S/N: ${serialNumber}...`);
+
+  // Tenta ler o Stick direto em cada IP encontrado para ver qual responde ao S/N correto
+  for (const ip of activeIps) {
+    try {
+      const result = await readStickDirect(ip, serialNumber, logger);
+      if (result && result.registers.length > 0) {
+        logger.log(`  🎉 WiFi Stick encontrado com sucesso no IP: ${ip}`);
+        return ip;
+      }
+    } catch (e) {
+      // ignora erro do teste
+    }
+  }
+
+  logger.warn(`  WiFi Stick com o S/N ${serialNumber} não respondeu nos IPs varridos.`);
+  return null;
+}
+
 // ─── Service Principal ────────────────────────────────────────────────────────
 
 @Injectable()
@@ -331,17 +397,41 @@ export class SolarmanService implements OnModuleInit {
 
     this.logger.log(`  Lendo ${usinaNome} → ${ip}:8899 (SN: ${serialNumber})`);
 
-    const result = await readStickDirect(ip, serialNumber, this.logger);
+    let targetIp = ip;
+    let result = await readStickDirect(targetIp, serialNumber, this.logger);
+
+    // Se falhar e for IP local (ex: roteador ou IP antigo), faz varredura automática na subrede
+    if ((!result || result.registers.length === 0) && (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.'))) {
+      const parts = ip.split('.');
+      if (parts.length === 4) {
+        const subnetBase = `${parts[0]}.${parts[1]}.${parts[2]}.`;
+        const foundIp = await scanSubnetForStick(subnetBase, serialNumber, this.logger);
+        if (foundIp) {
+          targetIp = foundIp;
+          const newDatalogger = `${foundIp}:${snStr}`;
+          try {
+            await this.prisma.usina.update({
+              where: { id: usinaId },
+              data: { datalogger: newDatalogger },
+            });
+            this.logger.log(`💾 IP do Datalogger atualizado automaticamente no banco para: ${newDatalogger}`);
+          } catch (e) {
+            // ignora erro ao salvar
+          }
+          result = await readStickDirect(targetIp, serialNumber, this.logger);
+        }
+      }
+    }
 
     if (!result || result.registers.length === 0) {
       this.logger.warn(`  ✗ ${usinaNome} — sem resposta (offline ou port forwarding não configurado)`);
       return {
-        usinaId, usinaNome, deviceSn: snStr, ipAddress: ip,
+        usinaId, usinaNome, deviceSn: snStr, ipAddress: targetIp,
         powerNow: null, generationToday: null, generationTotal: null,
         gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
         status: 'OFFLINE',
         lastUpdate: new Date(),
-        errorMessage: 'Sem resposta do WiFi Stick. Verifique o port forwarding.',
+        errorMessage: 'Sem resposta do WiFi Stick. Verifique se o aparelho está ligado e na mesma rede.',
       };
     }
 
@@ -349,7 +439,7 @@ export class SolarmanService implements OnModuleInit {
     this.logger.log(`  ✔ ${usinaNome} — ${parsed.status ?? 'ONLINE'} — ${(parsed.powerNow ?? 0).toFixed(2)} kW`);
 
     return {
-      usinaId, usinaNome, deviceSn: snStr, ipAddress: ip,
+      usinaId, usinaNome, deviceSn: snStr, ipAddress: targetIp,
       powerNow: parsed.powerNow ?? null,
       generationToday: parsed.generationToday ?? null,
       generationTotal: parsed.generationTotal ?? null,
@@ -392,6 +482,7 @@ export class SolarmanService implements OnModuleInit {
     success: boolean;
     message: string;
     data?: Partial<DeviceReading>;
+    discoveredIp?: string;
   }> {
     if (!ip || !sn) {
       return { success: false, message: 'IP e SN são obrigatórios.' };
@@ -402,23 +493,38 @@ export class SolarmanService implements OnModuleInit {
       return { success: false, message: 'SN inválido. Deve ser um número ou conter dígitos válidos (ex: 2375000001).' };
     }
 
-    this.logger.log(`🔍 Testando conexão: ${ip}:8899 (SN: ${serialNumber})`);
+    let targetIp = ip;
+    this.logger.log(`🔍 Testando conexão: ${targetIp}:8899 (SN: ${serialNumber})`);
 
-    const result = await readStickDirect(ip, serialNumber, this.logger);
+    let result = await readStickDirect(targetIp, serialNumber, this.logger);
+
+    // Se falhar e for IP local, tenta fazer a varredura automática na subrede
+    if ((!result || result.registers.length === 0) && (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.'))) {
+      const parts = ip.split('.');
+      if (parts.length === 4) {
+        const subnetBase = `${parts[0]}.${parts[1]}.${parts[2]}.`;
+        const foundIp = await scanSubnetForStick(subnetBase, serialNumber, this.logger);
+        if (foundIp) {
+          targetIp = foundIp;
+          result = await readStickDirect(targetIp, serialNumber, this.logger);
+        }
+      }
+    }
 
     if (!result || result.registers.length === 0) {
       return {
         success: false,
-        message: `Sem resposta do WiFi Stick em ${ip}:8899. Verifique:\n• Se o IP está correto\n• Se o port forwarding da porta 8899 está ativo no roteador\n• Se o SN (número de série) é o correto (etiqueta no stick)`,
+        message: `Sem resposta do WiFi Stick em ${ip}:8899. Verifique:\n• Se o IP e o S/N estão corretos e na mesma rede local\n• Se a porta 8899 está aberta no roteador (caso acesso externo)`,
       };
     }
 
     const parsed = parseRegisters(result.registers);
-    this.logger.log(`✔ Teste OK — ${(parsed.powerNow ?? 0).toFixed(2)} kW agora`);
+    this.logger.log(`✔ Teste OK — ${(parsed.powerNow ?? 0).toFixed(2)} kW agora no IP ${targetIp}`);
 
     return {
       success: true,
-      message: `✅ Datalogger respondeu! ${ip}:8899 (SN ${sn})`,
+      message: `✅ Datalogger respondeu! ${targetIp}:8899 (SN ${sn})${targetIp !== ip ? ' (IP descoberto automaticamente na rede!)' : ''}`,
+      discoveredIp: targetIp !== ip ? targetIp : undefined,
       data: {
         powerNow: parsed.powerNow,
         generationToday: parsed.generationToday,
@@ -443,7 +549,8 @@ export class SolarmanService implements OnModuleInit {
       return { success: false, message: testResult.message };
     }
 
-    const datalogger = `${ip}:${sn}`;
+    const finalIp = testResult.discoveredIp || ip;
+    const datalogger = `${finalIp}:${sn}`;
 
     try {
       const usina = await this.prisma.usina.update({
@@ -460,7 +567,7 @@ export class SolarmanService implements OnModuleInit {
 
       return {
         success: true,
-        message: `Monitoramento ativado para "${usina.name}"! Próxima leitura automática em 5 minutos.`,
+        message: `Monitoramento ativado para "${usina.name}"! IP descoberto/configurado: ${finalIp}`,
         reading,
       };
     } catch (e) {
