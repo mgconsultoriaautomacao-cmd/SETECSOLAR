@@ -37,7 +37,7 @@ import RouterIcon from '@mui/icons-material/Router';
 import WifiTetheringIcon from '@mui/icons-material/WifiTethering';
 import { useApp, type Usina } from '../context/AppContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL !== undefined ? import.meta.env.VITE_API_URL : 'http://localhost:3001';
 const getHeaders = () => ({
   'Content-Type': 'application/json',
   'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
