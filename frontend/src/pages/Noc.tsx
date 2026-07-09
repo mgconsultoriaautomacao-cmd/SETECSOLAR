@@ -93,13 +93,22 @@ export default function Noc() {
   const [readings, setReadings] = useState<DeviceReading[]>([]);
   const [events, setEvents] = useState<NocEvent[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING' | 'OK'>('ALL');
-  const [mapTheme, setMapTheme] = useState<'dark' | 'light' | 'satellite'>('dark');
+  const [mapTheme, setMapTheme] = useState<'dark' | 'light' | 'satellite'>(() => {
+    const saved = localStorage.getItem('noc_map_theme');
+    if (saved === 'dark' || saved === 'light' || saved === 'satellite') return saved;
+    return 'dark';
+  });
   const [isFetching, setIsFetching] = useState(false);
   const [lastFetch, setLastFetch] = useState('');
   const [solarmanConfigured, setSolarmanConfigured] = useState<boolean | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const prevReadingsRef = useRef<Map<string, DeviceReading>>(new Map());
+
+  // ── Salva preferência do tema do mapa ───────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem('noc_map_theme', mapTheme);
+  }, [mapTheme]);
 
   // ── Busca status do serviço Solarman ────────────────────────────────────
   useEffect(() => {

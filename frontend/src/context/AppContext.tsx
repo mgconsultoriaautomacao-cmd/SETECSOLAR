@@ -6,6 +6,8 @@ export interface Client {
   document: string;
   phone: string;
   email: string;
+  zipCode?: string;
+  address?: string;
   city: string;
   state: string;
   installationDate: string;
@@ -140,7 +142,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addClient = async (clientData: Omit<Client, 'id' | 'status' | 'gpsLatitude' | 'gpsLongitude'>) => {
-    const coords = await getCoordinates(clientData.city, clientData.state);
+    const coords = await getCoordinates(clientData.city, clientData.state, clientData.address);
 
     try {
       const response = await fetch(`${API_URL}/clients`, {
@@ -167,7 +169,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateClient = async (id: string, clientData: Partial<Client>) => {
     let coords: { lat?: number; lon?: number } = {};
     if (clientData.city && clientData.state) {
-      coords = await getCoordinates(clientData.city, clientData.state);
+      coords = await getCoordinates(clientData.city, clientData.state, clientData.address);
     }
 
     try {

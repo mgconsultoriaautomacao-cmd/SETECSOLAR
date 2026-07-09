@@ -19,6 +19,7 @@ import {
   DialogActions,
   Grid,
   IconButton,
+  CircularProgress,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
@@ -32,12 +33,15 @@ export default function Clientes() {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [loadingCep, setLoadingCep] = useState(false);
   
   const [clientForm, setClientForm] = useState({
     name: '',
     document: '',
     phone: '',
     email: '',
+    zipCode: '',
+    address: '',
     city: '',
     state: '',
     installationDate: new Date().toISOString().split('T')[0],
@@ -46,6 +50,35 @@ export default function Clientes() {
   const [openDelete, setOpenDelete] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const handleCepChange = async (cepValue: string) => {
+    const raw = cepValue.replace(/\D/g, '');
+    let formatted = raw;
+    if (raw.length > 5) {
+      formatted = raw.slice(0, 5) + '-' + raw.slice(5, 8);
+    }
+    setClientForm(prev => ({ ...prev, zipCode: formatted }));
+
+    if (raw.length === 8) {
+      setLoadingCep(true);
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
+        const data = await response.json();
+        if (!data.erro) {
+          setClientForm(prev => ({
+            ...prev,
+            address: data.logradouro ? `${data.logradouro}${data.bairro ? ' - ' + data.bairro : ''}` : prev.address,
+            city: data.localidade || prev.city,
+            state: data.uf || prev.state,
+          }));
+        }
+      } catch (err) {
+        console.error('Erro ao consultar ViaCEP:', err);
+      } finally {
+        setLoadingCep(false);
+      }
+    }
+  };
+
   const handleOpen = () => {
     setEditingClient(null);
     setClientForm({
@@ -53,6 +86,8 @@ export default function Clientes() {
       document: '',
       phone: '',
       email: '',
+      zipCode: '',
+      address: '',
       city: '',
       state: '',
       installationDate: new Date().toISOString().split('T')[0],
@@ -67,6 +102,8 @@ export default function Clientes() {
       document: client.document,
       phone: client.phone,
       email: client.email,
+      zipCode: client.zipCode || '',
+      address: client.address || '',
       city: client.city,
       state: client.state,
       installationDate: client.installationDate ? new Date(client.installationDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -242,6 +279,34 @@ export default function Clientes() {
                 fullWidth
                 value={clientForm.email}
                 onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 4 }}>
+              <TextField
+                label="CEP (Busca automática)"
+                placeholder="00000-000"
+                fullWidth
+                value={clientForm.zipCode}
+                onChange={(e) => handleCepChange(e.target.value)}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        {loadingCep ? <CircularProgress size={16} /> : <SearchIcon fontSize="small" className="text-slate-400" />}
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 8 }}>
+              <TextField
+                label="Endereço (Rua, Número, Bairro)"
+                fullWidth
+                value={clientForm.address}
+                onChange={(e) => setClientForm({ ...clientForm, address: e.target.value })}
                 slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
