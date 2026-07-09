@@ -89,7 +89,9 @@ export default function Layout({ children }: LayoutProps) {
         <div className="sidebar-content">
           <div>
             <div className="sidebar-logo-container">
-              <img src={logoSetec} alt="SETEC SOLAR" className="sidebar-logo" />
+              <div className="sidebar-logo-card" onClick={() => navigate('/dashboard')} role="button" tabIndex={0}>
+                <img src={logoSetec} alt="SETEC SOLAR" className="sidebar-logo" />
+              </div>
             </div>
             <ul className="sidebar-menu">
               {menuItems.map(item => {
@@ -142,8 +144,10 @@ export default function Layout({ children }: LayoutProps) {
       <aside className={`mobile-drawer ${mobileOpen ? 'open' : ''}`}>
         <div className="sidebar-content">
           <div>
-            <div className="sidebar-logo-container" style={{ justifyContent: 'space-between' }}>
-              <img src={logoSetec} alt="SETEC SOLAR" className="sidebar-logo" />
+            <div className="sidebar-logo-container" style={{ justifyContent: 'space-between', gap: '8px' }}>
+              <div className="sidebar-logo-card" onClick={() => { navigate('/dashboard'); setMobileOpen(false); }} role="button" tabIndex={0} style={{ flex: 1 }}>
+                <img src={logoSetec} alt="SETEC SOLAR" className="sidebar-logo" />
+              </div>
               <button
                 onClick={() => setMobileOpen(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#8b929c', padding: '4px' }}
