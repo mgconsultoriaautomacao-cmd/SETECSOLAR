@@ -29,6 +29,29 @@ import LayersIcon from '@mui/icons-material/Layers';
 
 type StatusFilter = 'Todos' | 'Normal' | 'Com alerta' | 'Crítico' | 'Desconhecido';
 
+const createDashboardMarker = (status: string) => {
+  const configs: Record<string, { color: string; pulse: string; border: string }> = {
+    ONLINE:   { color: '#22c55e', pulse: '#16a34a', border: '#0f172a' },
+    ALERT:    { color: '#f59e0b', pulse: '#d97706', border: '#0f172a' },
+    CRITICAL: { color: '#ef4444', pulse: '#dc2626', border: '#0f172a' },
+    OFFLINE:  { color: '#64748b', pulse: '', border: '#e2e8f0' },
+  };
+  const cfg = configs[status] || configs.OFFLINE;
+
+  return L.divIcon({
+    html: `
+      <div style="position:relative;display:flex;align-items:center;justify-content:center;width:24px;height:24px;">
+        ${cfg.pulse ? `<div style="position:absolute;width:100%;height:100%;border-radius:50%;background:${cfg.pulse};opacity:.5;animation:ping 1.5s cubic-bezier(0,0,.2,1) infinite;"></div>` : ''}
+        <div style="width:14px;height:14px;border-radius:50%;background:${cfg.color};border:2px solid ${cfg.border};box-shadow:0 2px 6px rgba(0,0,0,0.6);"></div>
+      </div>
+      <style>@keyframes ping{75%,100%{transform:scale(2);opacity:0;}}</style>
+    `,
+    className: '',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+  });
+};
+
 export default function Dashboard() {
   const { clients, usinas } = useApp();
   const navigate = useNavigate();
@@ -108,7 +131,7 @@ export default function Dashboard() {
             const lat = u.gpsLatitude ?? -14.235;
             const lng = u.gpsLongitude ?? -51.925;
             return (
-              <Marker key={u.id} position={[lat, lng]}>
+              <Marker key={u.id} position={[lat, lng]} icon={createDashboardMarker(u.status)}>
                 <Popup>
                   <strong>{u.name}</strong><br />
                   Cliente: {u.client || 'N/A'}<br />

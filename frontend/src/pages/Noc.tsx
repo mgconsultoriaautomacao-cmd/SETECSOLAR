@@ -64,13 +64,13 @@ const getHeaders = () => ({
 });
 
 const createCustomMarker = (status: string) => {
-  const configs: Record<string, { color: string; pulse: string }> = {
-    ONLINE:   { color: '#22c55e', pulse: '#16a34a' },
-    ALERT:    { color: '#f59e0b', pulse: '#d97706' },
-    CRITICAL: { color: '#f43f5e', pulse: '#dc2626' },
-    FAULT:    { color: '#f43f5e', pulse: '#dc2626' },
-    OFFLINE:  { color: '#475569', pulse: '' },
-    NO_SN:    { color: '#7c3aed', pulse: '' },
+  const configs: Record<string, { color: string; pulse: string; border: string }> = {
+    ONLINE:   { color: '#22c55e', pulse: '#16a34a', border: '#0f172a' },
+    ALERT:    { color: '#f59e0b', pulse: '#d97706', border: '#0f172a' },
+    CRITICAL: { color: '#f43f5e', pulse: '#dc2626', border: '#0f172a' },
+    FAULT:    { color: '#f43f5e', pulse: '#dc2626', border: '#0f172a' },
+    OFFLINE:  { color: '#64748b', pulse: '', border: '#e2e8f0' },
+    NO_SN:    { color: '#7c3aed', pulse: '', border: '#e2e8f0' },
   };
   const cfg = configs[status] || configs.OFFLINE;
 
@@ -78,7 +78,7 @@ const createCustomMarker = (status: string) => {
     html: `
       <div style="position:relative;display:flex;align-items:center;justify-content:center;width:24px;height:24px;">
         ${cfg.pulse ? `<div style="position:absolute;width:100%;height:100%;border-radius:50%;background:${cfg.pulse};opacity:.5;animation:ping 1.5s cubic-bezier(0,0,.2,1) infinite;"></div>` : ''}
-        <div style="width:14px;height:14px;border-radius:50%;background:${cfg.color};border:2px solid #0f172a;position:relative;"></div>
+        <div style="width:14px;height:14px;border-radius:50%;background:${cfg.color};border:2px solid ${cfg.border};box-shadow:0 2px 6px rgba(0,0,0,0.6);"></div>
       </div>
       <style>@keyframes ping{75%,100%{transform:scale(2);opacity:0;}}</style>
     `,
