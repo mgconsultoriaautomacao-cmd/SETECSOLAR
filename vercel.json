@@ -16,23 +16,7 @@
   ],
   "routes": [
     {
-      "src": "/clients(.*)",
-      "dest": "backend/src/main.ts"
-    },
-    {
-      "src": "/usinas(.*)",
-      "dest": "backend/src/main.ts"
-    },
-    {
-      "src": "/solarman(.*)",
-      "dest": "backend/src/main.ts"
-    },
-    {
-      "src": "/work-orders(.*)",
-      "dest": "backend/src/main.ts"
-    },
-    {
-      "src": "/tickets(.*)",
+      "src": "/api/(.*)",
       "dest": "backend/src/main.ts"
     },
     {
