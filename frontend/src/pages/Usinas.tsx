@@ -82,6 +82,22 @@ export default function Usinas() {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; data?: any } | null>(null);
   const [testLoading, setTestLoading] = useState(false);
   const [activateLoading, setActivateLoading] = useState(false);
+  const [detectingIp, setDetectingIp] = useState(false);
+
+  const detectPublicIp = async () => {
+    setDetectingIp(true);
+    try {
+      const response = await fetch('https://api.ipify.org?format=json');
+      const data = await response.json();
+      if (data && data.ip) {
+        setMonitorIp(data.ip);
+      }
+    } catch (err) {
+      console.error('Erro ao detectar IP público:', err);
+    } finally {
+      setDetectingIp(false);
+    }
+  };
 
   const openMonitorModal = (usina: Usina) => {
     setMonitorUsina(usina);
@@ -593,15 +609,26 @@ export default function Usinas() {
               </ol>
             </Alert>
 
-            <TextField
-              label="IP do Roteador (externo)"
-              fullWidth
-              value={monitorIp}
-              onChange={e => setMonitorIp(e.target.value)}
-              placeholder="Ex: 177.83.14.55"
-              slotProps={{ inputLabel: { shrink: true } }}
-              sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#1e293b' } }}
-            />
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'stretch' }}>
+              <TextField
+                label="IP do Roteador (externo / público)"
+                fullWidth
+                value={monitorIp}
+                onChange={e => setMonitorIp(e.target.value)}
+                placeholder="Ex: 177.83.14.55"
+                slotProps={{ inputLabel: { shrink: true } }}
+                sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#1e293b' } }}
+              />
+              <Button
+                variant="outlined"
+                onClick={detectPublicIp}
+                disabled={detectingIp}
+                title="Detectar IP Público Atual da sua rede"
+                sx={{ whiteSpace: 'nowrap', borderColor: '#3b82f6', color: '#60a5fa', px: 2, fontWeight: 600 }}
+              >
+                {detectingIp ? <CircularProgress size={16} /> : '⚡ Meu IP'}
+              </Button>
+            </Box>
 
             <TextField
               label="SN do WiFi Stick (Número de Série)"

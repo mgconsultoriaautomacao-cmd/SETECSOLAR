@@ -220,6 +220,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    // Evita sobreposição exata de pinos no mapa se as coordenadas forem iguais
+    if (usinas.some(u => Math.abs((u.gpsLatitude || 0) - lat) < 0.0001 && Math.abs((u.gpsLongitude || 0) - lon) < 0.0001)) {
+      lat += (Math.random() - 0.5) * 0.015;
+      lon += (Math.random() - 0.5) * 0.015;
+    }
+
     try {
       const response = await fetch(`${API_URL}/usinas`, {
         method: 'POST',
@@ -230,7 +236,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           paybackYears: usinaData.payback,
           gpsLatitude: lat,
           gpsLongitude: lon,
-          status: 'ONLINE',
+          status: usinaData.datalogger ? 'ONLINE' : 'OFFLINE',
         }),
       });
 
