@@ -105,9 +105,10 @@ model Client {
   user   User?   @relation("UserToClient", fields: [userId], references: [id], onDelete: SetNull)
 
   // Relacionamentos
-  usinas      Usina[]
-  workOrders  WorkOrder[]
-  tickets     Ticket[]
+  usinas           Usina[]
+  workOrders       WorkOrder[]
+  tickets          Ticket[]
+  financialRecords FinancialRecord[]
 }
 
 model Usina {
@@ -206,4 +207,31 @@ model Ticket {
   workOrder   WorkOrder?     @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+}
+
+model FinancialRecord {
+  id               String    @id @default(uuid())
+  type             String    // "PAGAR" or "RECEBER"
+  description      String
+  amount           Float
+  dueDate          DateTime  // Data de vencimento
+  entryDate        DateTime  // Data de entrada da nota / emissão
+  status           String    // "PAGO", "PENDENTE", "VENCIDO", "ATRASADO"
+  paymentDate      DateTime? // Data de pagamento / recebimento
+  supplierOrClient String    // Nome do fornecedor ou do cliente
+  ticketInfo       String?   // Informação do boleto
+  observations     String?   // Observações
+  clientId         String?   // Se associado a um cliente real (opcional)
+  client           Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model GmailAccount {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  refreshToken String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
