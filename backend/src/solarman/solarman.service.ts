@@ -1,5 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import axios from 'axios';
+import * as crypto from 'crypto';
+import { GrowattService } from './growatt.service';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocolo SolarmanV5 — leitura direta no WiFi Stick pela rede local/internet
@@ -316,8 +319,114 @@ async function scanSubnetForStick(
 export class SolarmanService implements OnModuleInit {
   private readonly logger = new Logger(SolarmanService.name);
   private readings = new Map<string, DeviceReading>();
+  private cloudAccessToken: string | null = null;
+  private cloudTokenExpiresAt: Date | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private growattService: GrowattService,
+  ) {}
+
+  private async getCloudToken(): Promise<string | null> {
+    const appId = process.env.SOLARMAN_APP_ID || process.env.SOLARMAN_EMAIL;
+    const appSecret = process.env.SOLARMAN_APP_SECRET || process.env.SOLARMAN_PASSWORD;
+    const email = process.env.SOLARMAN_EMAIL;
+    const password = process.env.SOLARMAN_PASSWORD;
+
+    if (!appId || !appSecret || !email || !password) {
+      return null;
+    }
+
+    if (this.cloudAccessToken && this.cloudTokenExpiresAt && this.cloudTokenExpiresAt > new Date()) {
+      return this.cloudAccessToken;
+    }
+
+    try {
+      const passwordHash = crypto.createHash('sha256').update(password).digest('hex');
+
+      const response = await axios.post(
+        `https://globalapi.solarmanpv.com/account/v1.0/token?appId=${appId}&language=en`,
+        {
+          appSecret,
+          email,
+          password: passwordHash,
+        }
+      );
+
+      if (response.data && response.data.access_token) {
+        this.cloudAccessToken = response.data.access_token;
+        const expiresInSeconds = response.data.expires_in || 7200;
+        this.cloudTokenExpiresAt = new Date(Date.now() + (expiresInSeconds - 600) * 1000);
+        return this.cloudAccessToken;
+      }
+    } catch (err: any) {
+      this.logger.error('Erro ao autenticar na API Cloud Solarman:', err.response?.data || err.message);
+    }
+
+    return null;
+  }
+
+  private async readUsinaFromCloud(deviceSn: string): Promise<Partial<DeviceReading> | null> {
+    const token = await this.getCloudToken();
+    if (!token) return null;
+
+    try {
+      const response = await axios.post(
+        'https://globalapi.solarmanpv.com/device/v1.0/currentData',
+        {
+          deviceSn,
+        },
+        {
+          headers: {
+            Authorization: `bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.data && response.data.success) {
+        const dataList = response.data.dataList || [];
+        const result: Partial<DeviceReading> = {
+          powerNow: null,
+          generationToday: null,
+          generationTotal: null,
+          gridVoltage: null,
+          gridFrequency: null,
+          temperature: null,
+          dcPower: null,
+        };
+
+        dataList.forEach((item: any) => {
+          const key = (item.key || '').toLowerCase();
+          const name = (item.name || '').toLowerCase();
+          const val = parseFloat(item.value);
+
+          if (isNaN(val)) return;
+
+          if (key.includes('active_power') || key.includes('apower') || key === 'power' || name.includes('active power') || name.includes('potência ativa')) {
+            result.powerNow = item.unit?.toLowerCase() === 'w' ? val / 1000 : val;
+          } else if (key.includes('daily_energy') || key.includes('generation_today') || key.includes('e_today') || key === 'etoday' || name.includes('daily') || name.includes('hoje')) {
+            result.generationToday = val;
+          } else if (key.includes('total_energy') || key.includes('generation_total') || key.includes('e_total') || key === 'etotal' || name.includes('total') || name.includes('geração total')) {
+            result.generationTotal = val;
+          } else if (key.includes('grid_voltage') || key.includes('voltage') || key === 'u' || key === 'v_grid' || name.includes('voltage') || name.includes('tensão')) {
+            result.gridVoltage = val;
+          } else if (key.includes('grid_frequency') || key.includes('frequency') || key === 'f_grid' || name.includes('frequency') || name.includes('frequência')) {
+            result.gridFrequency = val;
+          } else if (key.includes('temp') || key.includes('temperature') || name.includes('temp') || name.includes('temperatura')) {
+            result.temperature = val;
+          } else if (key.includes('dc_power') || key.includes('pv_power') || name.includes('dc power') || name.includes('pv power') || name.includes('potência dc')) {
+            result.dcPower = item.unit?.toLowerCase() === 'w' ? val : val * 1000;
+          }
+        });
+
+        return result;
+      }
+    } catch (err: any) {
+      this.logger.error(`Erro ao buscar dados do device ${deviceSn} via Solarman Cloud API:`, err.response?.data || err.message);
+    }
+    return null;
+  }
 
   onModuleInit() {
     this.logger.log('📡 Serviço de monitoramento direto inicializado.');
@@ -333,7 +442,7 @@ export class SolarmanService implements OnModuleInit {
   async pollAll(): Promise<void> {
     const usinas = await this.prisma.usina.findMany({
       where: { datalogger: { not: '' } },
-      select: { id: true, name: true, datalogger: true },
+      select: { id: true, name: true, datalogger: true, manufacturer: true },
     });
 
     if (usinas.length === 0) {
@@ -344,7 +453,7 @@ export class SolarmanService implements OnModuleInit {
     this.logger.log(`🔄 Polling de ${usinas.length} usina(s)...`);
 
     for (const usina of usinas) {
-      const reading = await this.readUsina(usina.id, usina.name, usina.datalogger);
+      const reading = await this.readUsina(usina.id, usina.name, usina.datalogger, usina.manufacturer);
       this.readings.set(usina.id, reading);
 
       // Atualiza status no banco
@@ -365,42 +474,27 @@ export class SolarmanService implements OnModuleInit {
   }
 
   // ─── Lê uma usina específica ────────────────────────────────────────────────
-  async readUsina(usinaId: string, usinaNome: string, datalogger: string): Promise<DeviceReading> {
-    // Valida formato "IP:SN"
-    if (!datalogger.includes(':')) {
-      this.logger.warn(`Usina "${usinaNome}" com formato inválido de datalogger: "${datalogger}". Use "IP:SN".`);
-      return {
-        usinaId, usinaNome,
-        deviceSn: datalogger,
-        ipAddress: '',
-        powerNow: null, generationToday: null, generationTotal: null,
-        gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
-        status: 'NOT_CONFIGURED',
-        lastUpdate: new Date(),
-        errorMessage: 'Formato inválido. Use "IP:SN" (ex: 177.83.14.55:2375000001)',
-      };
-    }
+  async readUsina(usinaId: string, usinaNome: string, datalogger: string, manufacturer?: string): Promise<DeviceReading> {
+    const cleanDatalogger = datalogger.trim();
+    const isMock = cleanDatalogger.toUpperCase().includes('MOCK') || cleanDatalogger === '0' || cleanDatalogger.includes(':0') || cleanDatalogger.includes(':MOCK') || cleanDatalogger.includes(':mock');
 
-    const [ip, snStr] = datalogger.split(':');
-
-    // MOCK MODE FALLBACK: Se o S/N contiver a palavra "MOCK" ou for "0", gera dados fictícios realistas
-    if (snStr && (snStr.toUpperCase().includes('MOCK') || snStr === '0')) {
+    if (isMock) {
+      const sn = cleanDatalogger.includes(':') ? cleanDatalogger.split(':')[1] : cleanDatalogger;
       const now = new Date();
       const hour = now.getHours();
       let powerNow = 0;
       
-      // Curva solar simples senoidal entre 6h e 18h
       if (hour >= 6 && hour <= 18) {
-        const peakPower = 5.4; // 5.4 kW de pico
+        const peakPower = 5.4;
         const rad = ((hour - 6) / 12) * Math.PI;
-        powerNow = peakPower * Math.sin(rad) * (0.9 + Math.random() * 0.2); // com oscilação de nuvens
+        powerNow = peakPower * Math.sin(rad) * (0.9 + Math.random() * 0.2);
       }
       
       const generationToday = powerNow > 0 ? (powerNow * (hour - 6) * 0.7) : 0;
       const generationTotal = 4580.2 + generationToday;
 
       return {
-        usinaId, usinaNome, deviceSn: snStr, ipAddress: ip || '127.0.0.1',
+        usinaId, usinaNome, deviceSn: sn, ipAddress: '127.0.0.1',
         powerNow: parseFloat(powerNow.toFixed(2)),
         generationToday: parseFloat(generationToday.toFixed(1)),
         generationTotal: parseFloat(generationTotal.toFixed(1)),
@@ -413,6 +507,73 @@ export class SolarmanService implements OnModuleInit {
       };
     }
 
+    // Se for do fabricante Growatt e NÃO for local (não contém dois pontos), lê via Growatt API
+    if (manufacturer && manufacturer.toLowerCase().includes('growatt') && !cleanDatalogger.includes(':')) {
+      const growattData = await this.growattService.readUsinaFromCloud(cleanDatalogger);
+      if (growattData) {
+        return {
+          usinaId,
+          usinaNome,
+          deviceSn: cleanDatalogger,
+          ipAddress: 'Growatt Cloud API',
+          powerNow: growattData.powerNow,
+          generationToday: growattData.generationToday,
+          generationTotal: growattData.generationTotal,
+          gridVoltage: null,
+          gridFrequency: null,
+          temperature: growattData.temperature,
+          dcPower: null,
+          status: growattData.status,
+          lastUpdate: new Date(),
+        };
+      }
+
+      return {
+        usinaId, usinaNome,
+        deviceSn: cleanDatalogger,
+        ipAddress: 'Growatt Cloud',
+        powerNow: null, generationToday: null, generationTotal: null,
+        gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+        status: 'OFFLINE',
+        lastUpdate: new Date(),
+        errorMessage: 'Sem resposta da Growatt Cloud API. Verifique a chave GROWATT_API_TOKEN no arquivo .env.',
+      };
+    }
+
+    // Se NÃO contém dois pontos (:), tenta ler via Solarman Cloud API
+    if (!cleanDatalogger.includes(':')) {
+      const cloudData = await this.readUsinaFromCloud(cleanDatalogger);
+      if (cloudData) {
+        return {
+          usinaId,
+          usinaNome,
+          deviceSn: cleanDatalogger,
+          ipAddress: 'Solarman Cloud API',
+          powerNow: cloudData.powerNow ?? null,
+          generationToday: cloudData.generationToday ?? null,
+          generationTotal: cloudData.generationTotal ?? null,
+          gridVoltage: cloudData.gridVoltage ?? null,
+          gridFrequency: cloudData.gridFrequency ?? null,
+          temperature: cloudData.temperature ?? null,
+          dcPower: cloudData.dcPower ?? null,
+          status: 'ONLINE',
+          lastUpdate: new Date(),
+        };
+      }
+
+      return {
+        usinaId, usinaNome,
+        deviceSn: cleanDatalogger,
+        ipAddress: 'Solarman Cloud',
+        powerNow: null, generationToday: null, generationTotal: null,
+        gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+        status: 'OFFLINE',
+        lastUpdate: new Date(),
+        errorMessage: 'Sem resposta da Solarman Cloud API. Verifique as credenciais no arquivo .env.',
+      };
+    }
+
+    const [ip, snStr] = cleanDatalogger.split(':');
     const serialNumber = parseSnToNumber(snStr);
 
     if (!ip || isNaN(serialNumber)) {
@@ -517,6 +678,46 @@ export class SolarmanService implements OnModuleInit {
   }> {
     if (!ip || !sn) {
       return { success: false, message: 'IP e SN são obrigatórios.' };
+    }
+
+    // Se o IP for igual a "cloud" ou "SOLARMANCLOUD", tenta testar via API Cloud
+    if (ip.toLowerCase() === 'cloud' || ip.toLowerCase() === 'solarmancloud') {
+      const cloudData = await this.readUsinaFromCloud(sn);
+      if (cloudData) {
+        return {
+          success: true,
+          message: `✅ Datalogger conectado via Solarman Cloud API com sucesso!`,
+          discoveredIp: 'Solarman Cloud',
+          data: cloudData
+        };
+      }
+      return {
+        success: false,
+        message: `Erro ao conectar via Solarman Cloud API. Verifique se o SN está correto e se as credenciais do .env estão configuradas.`,
+      };
+    }
+
+    // Se o IP for igual a "growatt" ou "growattcloud", tenta testar via API Growatt
+    if (ip.toLowerCase() === 'growatt' || ip.toLowerCase() === 'growattcloud') {
+      const growattData = await this.growattService.readUsinaFromCloud(sn);
+      if (growattData) {
+        return {
+          success: true,
+          message: `✅ Datalogger conectado via Growatt API com sucesso!`,
+          discoveredIp: 'Growatt Cloud',
+          data: {
+            powerNow: growattData.powerNow,
+            generationToday: growattData.generationToday,
+            generationTotal: growattData.generationTotal,
+            temperature: growattData.temperature,
+            status: growattData.status,
+          } as any
+        };
+      }
+      return {
+        success: false,
+        message: `Erro ao conectar via Growatt API. Verifique se o S/N está correto e se o GROWATT_API_TOKEN está configurado.`,
+      };
     }
 
     // MOCK MODE FALLBACK: Se o S/N contiver a palavra "MOCK" ou for "0", gera dados fictícios realistas

@@ -7,6 +7,8 @@
 -- ────────────────────────────────────────────────────────────
 -- 0. LIMPEZA (seguro para reexecutar em ambiente de testes)
 -- ────────────────────────────────────────────────────────────
+DROP TABLE IF EXISTS "FinancialRecord" CASCADE;
+DROP TABLE IF EXISTS "GmailAccount"    CASCADE;
 DROP TABLE IF EXISTS "WorkOrderPart"  CASCADE;
 DROP TABLE IF EXISTS "Ticket"         CASCADE;
 DROP TABLE IF EXISTS "WorkOrder"      CASCADE;
@@ -232,6 +234,44 @@ CREATE TABLE "Ticket" (
 );
 
 -- ────────────────────────────────────────────────────────────
+-- 8b. REGISTROS FINANCEIROS (Contas a Pagar / Receber)
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE "FinancialRecord" (
+    "id"               TEXT             NOT NULL,
+    "type"             TEXT             NOT NULL,     -- "PAGAR" ou "RECEBER"
+    "description"      TEXT             NOT NULL,
+    "amount"           DOUBLE PRECISION NOT NULL,
+    "dueDate"          TIMESTAMP(3)     NOT NULL,     -- Data de vencimento
+    "entryDate"        TIMESTAMP(3)     NOT NULL,     -- Data de entrada da nota / emissão
+    "status"           TEXT             NOT NULL,     -- "PAGO", "PENDENTE", "VENCIDO", "ATRASADO"
+    "paymentDate"      TIMESTAMP(3),                  -- Data de pagamento / recebimento
+    "supplierOrClient" TEXT             NOT NULL,     -- Nome do fornecedor ou do cliente
+    "ticketInfo"       TEXT,                          -- Informação do boleto
+    "observations"     TEXT,                          -- Observações
+    "clientId"         TEXT,                          -- Vínculo com cliente (opcional)
+    "createdAt"        TIMESTAMP(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"        TIMESTAMP(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "FinancialRecord_pkey" PRIMARY KEY ("id")
+);
+
+-- ────────────────────────────────────────────────────────────
+-- 8c. CONTAS GMAIL CONECTADAS (OAuth2)
+-- ────────────────────────────────────────────────────────────
+CREATE TABLE "GmailAccount" (
+    "id"           TEXT         NOT NULL,
+    "email"        TEXT         NOT NULL,
+    "name"         TEXT,
+    "refreshToken" TEXT         NOT NULL,
+    "createdAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt"    TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "GmailAccount_pkey" PRIMARY KEY ("id")
+);
+
+CREATE UNIQUE INDEX "GmailAccount_email_key" ON "GmailAccount"("email");
+
+-- ────────────────────────────────────────────────────────────
 -- 9. FOREIGN KEYS
 -- ────────────────────────────────────────────────────────────
 
@@ -289,6 +329,12 @@ ALTER TABLE "Ticket"
   FOREIGN KEY ("workOrderId") REFERENCES "WorkOrder"("id")
   ON DELETE SET NULL ON UPDATE CASCADE;
 
+-- FinancialRecord ↔ Client
+ALTER TABLE "FinancialRecord"
+  ADD CONSTRAINT "FinancialRecord_clientId_fkey"
+  FOREIGN KEY ("clientId") REFERENCES "Client"("id")
+  ON DELETE SET NULL ON UPDATE CASCADE;
+
 -- ────────────────────────────────────────────────────────────
 -- 10. ÍNDICES DE PERFORMANCE
 -- ────────────────────────────────────────────────────────────
@@ -301,6 +347,7 @@ CREATE INDEX "WorkOrderPart_workOrderId_idx" ON "WorkOrderPart"("workOrderId");
 CREATE INDEX "Ticket_clientId_idx"       ON "Ticket"("clientId");
 CREATE INDEX "Ticket_status_idx"         ON "Ticket"("status");
 CREATE INDEX "Invoice_usinaId_idx"       ON "Invoice"("usinaId");
+CREATE INDEX "FinancialRecord_clientId_idx" ON "FinancialRecord"("clientId");
 
 -- ────────────────────────────────────────────────────────────
 -- 11. TRIGGER: atualiza updatedAt automaticamente
@@ -337,6 +384,14 @@ CREATE TRIGGER "Ticket_updatedAt"
   BEFORE UPDATE ON "Ticket"
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
+CREATE TRIGGER "FinancialRecord_updatedAt"
+  BEFORE UPDATE ON "FinancialRecord"
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER "GmailAccount_updatedAt"
+  BEFORE UPDATE ON "GmailAccount"
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
 -- ────────────────────────────────────────────────────────────
 -- 12. ROW LEVEL SECURITY (recomendado no Supabase)
 -- ────────────────────────────────────────────────────────────
@@ -351,6 +406,8 @@ ALTER TABLE "Invoice"       DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WorkOrder"     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "WorkOrderPart" DISABLE ROW LEVEL SECURITY;
 ALTER TABLE "Ticket"        DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "FinancialRecord" DISABLE ROW LEVEL SECURITY;
+ALTER TABLE "GmailAccount"    DISABLE ROW LEVEL SECURITY;
 
 -- ────────────────────────────────────────────────────────────
 -- 13. DADOS INICIAIS (admin padrão do sistema)
