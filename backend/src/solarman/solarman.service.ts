@@ -319,26 +319,27 @@ async function scanSubnetForStick(
 export class SolarmanService implements OnModuleInit {
   private readonly logger = new Logger(SolarmanService.name);
   private readings = new Map<string, DeviceReading>();
-  private cloudAccessToken: string | null = null;
-  private cloudTokenExpiresAt: Date | null = null;
+  private cloudTokens = new Map<string, { token: string; expiresAt: Date }>();
 
   constructor(
     private prisma: PrismaService,
     private growattService: GrowattService,
   ) {}
 
-  private async getCloudToken(): Promise<string | null> {
-    const appId = process.env.SOLARMAN_APP_ID || process.env.SOLARMAN_EMAIL;
-    const appSecret = process.env.SOLARMAN_APP_SECRET || process.env.SOLARMAN_PASSWORD;
-    const email = process.env.SOLARMAN_EMAIL;
-    const password = process.env.SOLARMAN_PASSWORD;
+  private async getCloudToken(supplier?: any): Promise<string | null> {
+    const supplierId = supplier?.id || 'default';
+    const appId = supplier?.appId || process.env.SOLARMAN_APP_ID || process.env.SOLARMAN_EMAIL;
+    const appSecret = supplier?.appSecret || process.env.SOLARMAN_APP_SECRET || process.env.SOLARMAN_PASSWORD;
+    const email = supplier?.username || process.env.SOLARMAN_EMAIL;
+    const password = supplier?.password || process.env.SOLARMAN_PASSWORD;
 
     if (!appId || !appSecret || !email || !password) {
       return null;
     }
 
-    if (this.cloudAccessToken && this.cloudTokenExpiresAt && this.cloudTokenExpiresAt > new Date()) {
-      return this.cloudAccessToken;
+    const cached = this.cloudTokens.get(supplierId);
+    if (cached && cached.expiresAt > new Date()) {
+      return cached.token;
     }
 
     try {
@@ -354,20 +355,21 @@ export class SolarmanService implements OnModuleInit {
       );
 
       if (response.data && response.data.access_token) {
-        this.cloudAccessToken = response.data.access_token;
+        const token = response.data.access_token;
         const expiresInSeconds = response.data.expires_in || 7200;
-        this.cloudTokenExpiresAt = new Date(Date.now() + (expiresInSeconds - 600) * 1000);
-        return this.cloudAccessToken;
+        const expiresAt = new Date(Date.now() + (expiresInSeconds - 600) * 1000);
+        this.cloudTokens.set(supplierId, { token, expiresAt });
+        return token;
       }
     } catch (err: any) {
-      this.logger.error('Erro ao autenticar na API Cloud Solarman:', err.response?.data || err.message);
+      this.logger.error(`Erro ao autenticar na API Cloud Solarman (${supplierId}):`, err.response?.data || err.message);
     }
 
     return null;
   }
 
-  private async readUsinaFromCloud(deviceSn: string): Promise<Partial<DeviceReading> | null> {
-    const token = await this.getCloudToken();
+  private async readUsinaFromCloud(deviceSn: string, supplier?: any): Promise<Partial<DeviceReading> | null> {
+    const token = await this.getCloudToken(supplier);
     if (!token) return null;
 
     try {
@@ -442,7 +444,7 @@ export class SolarmanService implements OnModuleInit {
   async pollAll(): Promise<void> {
     const usinas = await this.prisma.usina.findMany({
       where: { datalogger: { not: '' } },
-      select: { id: true, name: true, datalogger: true, manufacturer: true },
+      include: { dataloggerSupplier: true },
     });
 
     if (usinas.length === 0) {
@@ -453,7 +455,7 @@ export class SolarmanService implements OnModuleInit {
     this.logger.log(`🔄 Polling de ${usinas.length} usina(s)...`);
 
     for (const usina of usinas) {
-      const reading = await this.readUsina(usina.id, usina.name, usina.datalogger, usina.manufacturer);
+      const reading = await this.readUsina(usina.id, usina.name, usina.datalogger, usina.dataloggerSupplier);
       this.readings.set(usina.id, reading);
 
       // Atualiza status no banco
@@ -474,7 +476,7 @@ export class SolarmanService implements OnModuleInit {
   }
 
   // ─── Lê uma usina específica ────────────────────────────────────────────────
-  async readUsina(usinaId: string, usinaNome: string, datalogger: string, manufacturer?: string): Promise<DeviceReading> {
+  async readUsina(usinaId: string, usinaNome: string, datalogger: string, supplier?: any): Promise<DeviceReading> {
     const cleanDatalogger = datalogger.trim();
     const isMock = cleanDatalogger.toUpperCase().includes('MOCK') || cleanDatalogger === '0' || cleanDatalogger.includes(':0') || cleanDatalogger.includes(':MOCK') || cleanDatalogger.includes(':mock');
 
@@ -507,40 +509,63 @@ export class SolarmanService implements OnModuleInit {
       };
     }
 
-    // Se for do fabricante Growatt e NÃO for local (não contém dois pontos), lê via Growatt API
-    if (manufacturer && manufacturer.toLowerCase().includes('growatt') && !cleanDatalogger.includes(':')) {
-      const growattData = await this.growattService.readUsinaFromCloud(cleanDatalogger);
-      if (growattData) {
+    // Se houver fornecedor associado no banco
+    if (supplier && !cleanDatalogger.includes(':')) {
+      if (supplier.type === 'GROWATT_CLOUD') {
+        const growattData = await this.growattService.readUsinaFromCloud(cleanDatalogger, 'inv', supplier.token);
+        if (growattData) {
+          return {
+            usinaId, usinaNome, deviceSn: cleanDatalogger,
+            ipAddress: 'Growatt Cloud API',
+            powerNow: growattData.powerNow,
+            generationToday: growattData.generationToday,
+            generationTotal: growattData.generationTotal,
+            gridVoltage: null, gridFrequency: null,
+            temperature: growattData.temperature,
+            dcPower: null,
+            status: growattData.status,
+            lastUpdate: new Date(),
+          };
+        }
         return {
-          usinaId,
-          usinaNome,
-          deviceSn: cleanDatalogger,
-          ipAddress: 'Growatt Cloud API',
-          powerNow: growattData.powerNow,
-          generationToday: growattData.generationToday,
-          generationTotal: growattData.generationTotal,
-          gridVoltage: null,
-          gridFrequency: null,
-          temperature: growattData.temperature,
-          dcPower: null,
-          status: growattData.status,
-          lastUpdate: new Date(),
+          usinaId, usinaNome, deviceSn: cleanDatalogger,
+          ipAddress: 'Growatt Cloud',
+          powerNow: null, generationToday: null, generationTotal: null,
+          gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+          status: 'OFFLINE', lastUpdate: new Date(),
+          errorMessage: `Sem resposta da Growatt Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
         };
       }
 
-      return {
-        usinaId, usinaNome,
-        deviceSn: cleanDatalogger,
-        ipAddress: 'Growatt Cloud',
-        powerNow: null, generationToday: null, generationTotal: null,
-        gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
-        status: 'OFFLINE',
-        lastUpdate: new Date(),
-        errorMessage: 'Sem resposta da Growatt Cloud API. Verifique a chave GROWATT_API_TOKEN no arquivo .env.',
-      };
+      if (supplier.type === 'SOLARMAN_CLOUD') {
+        const cloudData = await this.readUsinaFromCloud(cleanDatalogger, supplier);
+        if (cloudData) {
+          return {
+            usinaId, usinaNome, deviceSn: cleanDatalogger,
+            ipAddress: 'Solarman Cloud API',
+            powerNow: cloudData.powerNow ?? null,
+            generationToday: cloudData.generationToday ?? null,
+            generationTotal: cloudData.generationTotal ?? null,
+            gridVoltage: cloudData.gridVoltage ?? null,
+            gridFrequency: cloudData.gridFrequency ?? null,
+            temperature: cloudData.temperature ?? null,
+            dcPower: cloudData.dcPower ?? null,
+            status: 'ONLINE',
+            lastUpdate: new Date(),
+          };
+        }
+        return {
+          usinaId, usinaNome, deviceSn: cleanDatalogger,
+          ipAddress: 'Solarman Cloud',
+          powerNow: null, generationToday: null, generationTotal: null,
+          gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+          status: 'OFFLINE', lastUpdate: new Date(),
+          errorMessage: `Sem resposta da Solarman Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
+        };
+      }
     }
 
-    // Se NÃO contém dois pontos (:), tenta ler via Solarman Cloud API
+    // Se NÃO contém dois pontos (:), tenta ler via Solarman Cloud API legado (Global)
     if (!cleanDatalogger.includes(':')) {
       const cloudData = await this.readUsinaFromCloud(cleanDatalogger);
       if (cloudData) {
@@ -670,7 +695,7 @@ export class SolarmanService implements OnModuleInit {
   }
 
   // ─── Testa conexão direta com datalogger dado IP + SN ──────────────────────
-  async testConnection(ip: string, sn: string): Promise<{
+  async testConnection(ip: string, sn: string, supplierId?: string): Promise<{
     success: boolean;
     message: string;
     data?: Partial<DeviceReading>;
@@ -680,9 +705,16 @@ export class SolarmanService implements OnModuleInit {
       return { success: false, message: 'IP e SN são obrigatórios.' };
     }
 
+    let supplier: any = null;
+    if (supplierId) {
+      supplier = await this.prisma.dataloggerSupplier.findUnique({
+        where: { id: supplierId },
+      });
+    }
+
     // Se o IP for igual a "cloud" ou "SOLARMANCLOUD", tenta testar via API Cloud
     if (ip.toLowerCase() === 'cloud' || ip.toLowerCase() === 'solarmancloud') {
-      const cloudData = await this.readUsinaFromCloud(sn);
+      const cloudData = await this.readUsinaFromCloud(sn, supplier);
       if (cloudData) {
         return {
           success: true,
@@ -693,13 +725,13 @@ export class SolarmanService implements OnModuleInit {
       }
       return {
         success: false,
-        message: `Erro ao conectar via Solarman Cloud API. Verifique se o SN está correto e se as credenciais do .env estão configuradas.`,
+        message: `Erro ao conectar via Solarman Cloud API. Verifique se o SN está correto e se as credenciais do fornecedor/env estão configuradas.`,
       };
     }
 
     // Se o IP for igual a "growatt" ou "growattcloud", tenta testar via API Growatt
     if (ip.toLowerCase() === 'growatt' || ip.toLowerCase() === 'growattcloud') {
-      const growattData = await this.growattService.readUsinaFromCloud(sn);
+      const growattData = await this.growattService.readUsinaFromCloud(sn, 'inv', supplier?.token);
       if (growattData) {
         return {
           success: true,
@@ -716,7 +748,7 @@ export class SolarmanService implements OnModuleInit {
       }
       return {
         success: false,
-        message: `Erro ao conectar via Growatt API. Verifique se o S/N está correto e se o GROWATT_API_TOKEN está configurado.`,
+        message: `Erro ao conectar via Growatt API. Verifique se o S/N está correto e se as credenciais do fornecedor/env estão configuradas.`,
       };
     }
 
@@ -798,12 +830,12 @@ export class SolarmanService implements OnModuleInit {
   }
 
   // ─── Ativa monitoramento: salva IP:SN na usina e faz leitura imediata ───────
-  async activateMonitoring(usinaId: string, ip: string, sn: string): Promise<{
+  async activateMonitoring(usinaId: string, ip: string, sn: string, supplierId?: string): Promise<{
     success: boolean;
     message: string;
     reading?: DeviceReading;
   }> {
-    const testResult = await this.testConnection(ip, sn);
+    const testResult = await this.testConnection(ip, sn, supplierId);
 
     if (!testResult.success) {
       return { success: false, message: testResult.message };
@@ -815,12 +847,16 @@ export class SolarmanService implements OnModuleInit {
     try {
       const usina = await this.prisma.usina.update({
         where: { id: usinaId },
-        data: { datalogger, status: 'ONLINE' },
-        select: { id: true, name: true, datalogger: true },
+        data: {
+          datalogger,
+          status: 'ONLINE',
+          dataloggerSupplierId: supplierId || null,
+        },
+        include: { dataloggerSupplier: true },
       });
 
       // Faz leitura imediata e salva no cache
-      const reading = await this.readUsina(usina.id, usina.name, usina.datalogger);
+      const reading = await this.readUsina(usina.id, usina.name, usina.datalogger, usina.dataloggerSupplier);
       this.readings.set(usina.id, reading);
 
       this.logger.log(`✅ Monitoramento ativado para usina ${usina.name} → ${datalogger}`);

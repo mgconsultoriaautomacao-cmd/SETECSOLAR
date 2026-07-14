@@ -45,7 +45,7 @@ const getHeaders = () => ({
 });
 
 export default function Usinas() {
-  const { usinas, clients, addUsina, updateUsina, deleteUsina } = useApp();
+  const { usinas, clients, addUsina, updateUsina, deleteUsina, suppliers, addSupplier, updateSupplier, deleteSupplier } = useApp();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editingUsina, setEditingUsina] = useState<Usina | null>(null);
@@ -56,7 +56,7 @@ export default function Usinas() {
     capacityKwp: 10,
     inverterCapacity: 8,
     moduleCount: 20,
-    manufacturer: 'Deye',
+    manufacturer: '',
     model: '',
     utility: 'Enel SP',
     estimatedKwh: 1200,
@@ -69,10 +69,66 @@ export default function Usinas() {
     maxEnergyPeak: 12.0,
     installationDate: new Date().toISOString().split('T')[0],
     approvalDate: new Date().toISOString().split('T')[0],
+    dataloggerSupplierId: '',
   });
 
   const [openDelete, setOpenDelete] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  // ─── Gerenciamento de Fornecedores ───
+  const [openSupplierManager, setOpenSupplierManager] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<any>(null);
+  const [supplierForm, setSupplierForm] = useState({
+    name: '',
+    type: 'GROWATT_CLOUD',
+    token: '',
+    appId: '',
+    appSecret: '',
+    username: '',
+    password: '',
+  });
+
+  const handleOpenAddSupplier = () => {
+    setEditingSupplier(null);
+    setSupplierForm({
+      name: '',
+      type: 'GROWATT_CLOUD',
+      token: '',
+      appId: '',
+      appSecret: '',
+      username: '',
+      password: '',
+    });
+  };
+
+  const handleOpenEditSupplier = (supplier: any) => {
+    setEditingSupplier(supplier);
+    setSupplierForm({
+      name: supplier.name,
+      type: supplier.type,
+      token: supplier.token || '',
+      appId: supplier.appId || '',
+      appSecret: supplier.appSecret || '',
+      username: supplier.username || '',
+      password: supplier.password || '',
+    });
+  };
+
+  const handleSaveSupplier = async () => {
+    if (!supplierForm.name || !supplierForm.type) return;
+    if (editingSupplier) {
+      await updateSupplier(editingSupplier.id, supplierForm);
+    } else {
+      await addSupplier(supplierForm);
+    }
+    handleOpenAddSupplier();
+  };
+
+  const handleDeleteSupplier = async (id: string) => {
+    if (window.confirm('Deseja realmente excluir este fornecedor/conta? Usinas associadas ficarão sem fornecedor.')) {
+      await deleteSupplier(id);
+    }
+  };
 
   // ── Estado do modal de Configurar Monitoramento ────────────────────────────
   const [monitorModal, setMonitorModal] = useState(false);
@@ -99,6 +155,8 @@ export default function Usinas() {
     }
   };
 
+  const [monitorSupplierId, setMonitorSupplierId] = useState('');
+
   const openMonitorModal = (usina: Usina) => {
     setMonitorUsina(usina);
     // Pre-fill from existing datalogger "IP:SN" if configured
@@ -110,6 +168,7 @@ export default function Usinas() {
       setMonitorIp('');
       setMonitorSn(usina.datalogger || '');
     }
+    setMonitorSupplierId(usina.dataloggerSupplierId || '');
     setTestResult(null);
     setMonitorModal(true);
   };
@@ -121,7 +180,7 @@ export default function Usinas() {
       const r = await fetch(`${API_URL}/solarman/test`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ ip: monitorIp, sn: monitorSn }),
+        body: JSON.stringify({ ip: monitorIp, sn: monitorSn, supplierId: monitorSupplierId }),
       });
       const result = await r.json();
       setTestResult(result);
@@ -139,7 +198,7 @@ export default function Usinas() {
       const r = await fetch(`${API_URL}/solarman/activate/${monitorUsina.id}`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ ip: monitorIp, sn: monitorSn }),
+        body: JSON.stringify({ ip: monitorIp, sn: monitorSn, supplierId: monitorSupplierId }),
       });
       const result = await r.json();
       setTestResult({ success: result.success, message: result.message });
@@ -163,7 +222,7 @@ export default function Usinas() {
       capacityKwp: 10,
       inverterCapacity: 8,
       moduleCount: 20,
-      manufacturer: 'Deye',
+      manufacturer: '',
       model: '',
       utility: 'Enel SP',
       estimatedKwh: 1200,
@@ -176,11 +235,12 @@ export default function Usinas() {
       maxEnergyPeak: 12.0,
       installationDate: new Date().toISOString().split('T')[0],
       approvalDate: new Date().toISOString().split('T')[0],
+      dataloggerSupplierId: '',
     });
     setOpen(true);
   };
 
-  const handleOpenEdit = (usina: Usina) => {
+  const handleOpenEdit = (usina: any) => {
     setEditingUsina(usina);
     setUsinaForm({
       name: usina.name,
@@ -201,6 +261,7 @@ export default function Usinas() {
       maxEnergyPeak: usina.maxEnergyPeak || 0,
       installationDate: usina.installationDate ? new Date(usina.installationDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       approvalDate: usina.approvalDate ? new Date(usina.approvalDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      dataloggerSupplierId: usina.dataloggerSupplierId || '',
     });
     setOpen(true);
   };
@@ -319,7 +380,10 @@ export default function Usinas() {
                 <TableCell className="text-slate-300">
                   <Box className="flex flex-col">
                     <span>Sn: {usina.datalogger || 'N/A'}</span>
-                    <span className="text-slate-400 text-xs">{usina.manufacturer} {usina.model}</span>
+                    <span className="text-slate-400 text-xs">
+                      {usina.manufacturer} {usina.model}
+                      {(usina as any).dataloggerSupplier && ` [ ${(usina as any).dataloggerSupplier.name} ]`}
+                    </span>
                   </Box>
                 </TableCell>
                 <TableCell className="text-slate-300">
@@ -486,6 +550,43 @@ export default function Usinas() {
               />
             </Grid>
 
+            <Grid size={{ xs: 12, sm: 5 }}>
+              <FormControl fullWidth>
+                <InputLabel id="supplier-select-label" shrink>Fornecedor/Conta do Datalogger</InputLabel>
+                <Select
+                  labelId="supplier-select-label"
+                  value={usinaForm.dataloggerSupplierId}
+                  label="Fornecedor/Conta do Datalogger"
+                  notched
+                  displayEmpty
+                  onChange={(e) => {
+                    const suppId = e.target.value;
+                    const supp = suppliers.find(s => s.id === suppId);
+                    setUsinaForm({ 
+                      ...usinaForm, 
+                      dataloggerSupplierId: suppId,
+                      // Preenche o fabricante caso esteja em branco
+                      manufacturer: usinaForm.manufacturer || (supp ? (supp.type.includes('GROWATT') ? 'Growatt' : 'Solarman') : '')
+                    });
+                  }}
+                >
+                  <MenuItem value=""><em>Nenhum / Monitoramento Local</em></MenuItem>
+                  {suppliers.map(s => (
+                    <MenuItem key={s.id} value={s.id}>{s.name} ({s.type})</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid size={{ xs: 12, sm: 3 }} sx={{ display: 'flex', alignItems: 'center' }}>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                onClick={() => setOpenSupplierManager(true)}
+                sx={{ height: '40px', color: '#f57c00', borderColor: '#f57c0040', textTransform: 'none', fontWeight: 600, width: '100%' }}
+              >
+                + Fornecedor
+              </Button>
+            </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
                 label="Fabricante Inversor"
@@ -493,6 +594,7 @@ export default function Usinas() {
                 value={usinaForm.manufacturer}
                 onChange={(e) => setUsinaForm({ ...usinaForm, manufacturer: e.target.value })}
                 slotProps={{ inputLabel: { shrink: true } }}
+                placeholder="Ex: Growatt, Deye, Solis"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -641,6 +743,23 @@ export default function Usinas() {
               sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#1e293b' } }}
             />
 
+            <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#1e293b' } }}>
+              <InputLabel id="monitor-supplier-select-label" shrink>Fornecedor/Conta do Datalogger</InputLabel>
+              <Select
+                labelId="monitor-supplier-select-label"
+                value={monitorSupplierId}
+                label="Fornecedor/Conta do Datalogger"
+                notched
+                displayEmpty
+                onChange={e => setMonitorSupplierId(e.target.value)}
+              >
+                <MenuItem value=""><em>Nenhum / Monitoramento Local</em></MenuItem>
+                {suppliers.map(s => (
+                  <MenuItem key={s.id} value={s.id}>{s.name} ({s.type})</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
             {/* Resultado do Teste */}
             {testResult && (
               <Alert
@@ -695,6 +814,162 @@ export default function Usinas() {
             sx={{ bgcolor: '#f57c00', '&:hover': { bgcolor: '#e64a19' }, fontWeight: 700 }}
           >
             Ativar Monitoramento
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Modal de Gerenciamento de Fornecedores ─────────────────────────── */}
+      <Dialog
+        open={openSupplierManager}
+        onClose={() => setOpenSupplierManager(false)}
+        slotProps={{ paper: { sx: { bgcolor: '#0f172a', color: '#f8fafc', border: '1px solid #1e293b', maxWidth: 650, width: '100%' } } }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid #1e293b' }}>
+          Gerenciar Fornecedores e Contas de Monitoramento
+        </DialogTitle>
+        <DialogContent sx={{ pt: 3, display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Formulário de Adicionar/Editar */}
+          <Paper sx={{ p: 2.5, bgcolor: '#1e293b', borderRadius: 2, border: '1px solid #334155' }}>
+            <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 'bold', mb: 2 }}>
+              {editingSupplier ? 'Editar Conta/Fornecedor' : 'Adicionar Conta/Fornecedor'}
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Nome da Conta / Identificador"
+                  fullWidth
+                  value={supplierForm.name}
+                  onChange={e => setSupplierForm({ ...supplierForm, name: e.target.value })}
+                  placeholder="Ex: Growatt Principal, Solarman SETEC"
+                  slotProps={{ inputLabel: { shrink: true } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <FormControl fullWidth>
+                  <InputLabel id="supplier-type-label" shrink>Tipo de Conexão</InputLabel>
+                  <Select
+                    labelId="supplier-type-label"
+                    value={supplierForm.type}
+                    label="Tipo de Conexão"
+                    notched
+                    onChange={e => setSupplierForm({ ...supplierForm, type: e.target.value })}
+                  >
+                    <MenuItem value="GROWATT_CLOUD">Growatt OpenAPI Cloud</MenuItem>
+                    <MenuItem value="SOLARMAN_CLOUD">Solarman OpenAPI Cloud</MenuItem>
+                    <MenuItem value="MODBUS_LOCAL">Modbus TCP Direto (Local)</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              {supplierForm.type === 'GROWATT_CLOUD' && (
+                <Grid size={12}>
+                  <TextField
+                    label="API Token (Growatt)"
+                    fullWidth
+                    value={supplierForm.token}
+                    onChange={e => setSupplierForm({ ...supplierForm, token: e.target.value })}
+                    placeholder="Ex: 82774gx5t68b8zdei8..."
+                    slotProps={{ inputLabel: { shrink: true } }}
+                  />
+                </Grid>
+              )}
+
+              {supplierForm.type === 'SOLARMAN_CLOUD' && (
+                <>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="App ID (Solarman)"
+                      fullWidth
+                      value={supplierForm.appId}
+                      onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="App Secret (Solarman)"
+                      fullWidth
+                      value={supplierForm.appSecret}
+                      onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value })}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="E-mail / Usuário Solarman"
+                      fullWidth
+                      value={supplierForm.username}
+                      onChange={e => setSupplierForm({ ...supplierForm, username: e.target.value })}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="Senha Solarman"
+                      type="password"
+                      fullWidth
+                      value={supplierForm.password}
+                      onChange={e => setSupplierForm({ ...supplierForm, password: e.target.value })}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                </>
+              )}
+            </Grid>
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+              {editingSupplier && (
+                <Button size="small" onClick={handleOpenAddSupplier} color="inherit">
+                  Limpar / Novo
+                </Button>
+              )}
+              <Button size="small" onClick={handleSaveSupplier} variant="contained" color="success">
+                {editingSupplier ? 'Atualizar Fornecedor' : 'Adicionar Fornecedor'}
+              </Button>
+            </Box>
+          </Paper>
+
+          {/* Lista de cadastrados */}
+          <Typography variant="subtitle2" sx={{ color: '#fff', fontWeight: 'bold' }}>
+            Contas Cadastradas ({suppliers.length})
+          </Typography>
+          <TableContainer component={Paper} className="bg-slate-950 border border-slate-800" sx={{ maxHeight: 200 }}>
+            <Table size="small" stickyHeader>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>Nome</TableCell>
+                  <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>Tipo</TableCell>
+                  <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }} align="center">Ações</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {suppliers.map(s => (
+                  <TableRow key={s.id} sx={{ '&:hover': { bgcolor: '#1e293b40' } }}>
+                    <TableCell sx={{ color: '#fff', bgcolor: 'transparent' }}>{s.name}</TableCell>
+                    <TableCell sx={{ color: '#94a3b8', bgcolor: 'transparent' }}>{s.type}</TableCell>
+                    <TableCell align="center" sx={{ bgcolor: 'transparent' }}>
+                      <IconButton size="small" color="primary" onClick={() => handleOpenEditSupplier(s)}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" color="error" onClick={() => handleDeleteSupplier(s.id)}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {suppliers.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center" sx={{ color: '#64748b', py: 2 }}>
+                      Nenhuma conta de fornecedor cadastrada.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #1e293b' }}>
+          <Button onClick={() => setOpenSupplierManager(false)} variant="contained" color="primary">
+            Concluir
           </Button>
         </DialogActions>
       </Dialog>

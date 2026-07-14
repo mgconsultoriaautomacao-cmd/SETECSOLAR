@@ -40,6 +40,18 @@ export interface Usina {
   maxEnergyPeak?: number;
   installationDate?: string;
   approvalDate?: string;
+  dataloggerSupplierId?: string;
+}
+
+export interface DataloggerSupplier {
+  id: string;
+  name: string;
+  type: string; // "GROWATT_CLOUD" | "SOLARMAN_CLOUD" | "MODBUS_LOCAL" | "MOCK"
+  token?: string;
+  appId?: string;
+  appSecret?: string;
+  username?: string;
+  password?: string;
 }
 
 interface AppContextType {
@@ -53,6 +65,10 @@ interface AppContextType {
   deleteUsina: (id: string) => Promise<void>;
   refreshData: () => Promise<void>;
   addTicket: (ticket: { clientId: string; category: string; title: string; description: string }) => Promise<any>;
+  suppliers: DataloggerSupplier[];
+  addSupplier: (supplier: Omit<DataloggerSupplier, 'id'>) => Promise<void>;
+  updateSupplier: (id: string, supplier: Partial<DataloggerSupplier>) => Promise<void>;
+  deleteSupplier: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -62,6 +78,21 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [usinas, setUsinas] = useState<Usina[]>([]);
+  const [suppliers, setSuppliers] = useState<DataloggerSupplier[]>([]);
+
+  const fetchSuppliers = async () => {
+    try {
+      const response = await fetch(`${API_URL}/datalogger-suppliers`, {
+        headers: getHeaders(),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSuppliers(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch suppliers:', err);
+    }
+  };
 
   const getHeaders = () => {
     return {
@@ -113,7 +144,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshData = async () => {
-    await Promise.all([fetchClients(), fetchUsinas()]);
+    await Promise.all([fetchClients(), fetchUsinas(), fetchSuppliers()]);
   };
 
   useEffect(() => {
@@ -309,8 +340,57 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addSupplier = async (supplierData: Omit<DataloggerSupplier, 'id'>) => {
+    try {
+      const response = await fetch(`${API_URL}/datalogger-suppliers`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify(supplierData),
+      });
+      if (response.ok) {
+        await fetchSuppliers();
+      }
+    } catch (err) {
+      console.error('Failed to create supplier:', err);
+    }
+  };
+
+  const updateSupplier = async (id: string, supplierData: Partial<DataloggerSupplier>) => {
+    try {
+      const response = await fetch(`${API_URL}/datalogger-suppliers/${id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify(supplierData),
+      });
+      if (response.ok) {
+        await fetchSuppliers();
+      }
+    } catch (err) {
+      console.error('Failed to update supplier:', err);
+    }
+  };
+
+  const deleteSupplier = async (id: string) => {
+    try {
+      const response = await fetch(`${API_URL}/datalogger-suppliers/${id}`, {
+        method: 'DELETE',
+        headers: getHeaders(),
+      });
+      if (response.ok) {
+        await refreshData();
+      }
+    } catch (err) {
+      console.error('Failed to delete supplier:', err);
+    }
+  };
+
   return (
-    <AppContext.Provider value={{ clients, addClient, updateClient, deleteClient, usinas, addUsina, updateUsina, deleteUsina, refreshData, addTicket }}>
+    <AppContext.Provider value={{
+      clients, addClient, updateClient, deleteClient,
+      usinas, addUsina, updateUsina, deleteUsina,
+      refreshData, addTicket,
+      suppliers, addSupplier, updateSupplier, deleteSupplier
+    }}>
       {children}
     </AppContext.Provider>
   );

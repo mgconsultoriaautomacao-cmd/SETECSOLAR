@@ -1,63 +1,45 @@
-/# Walkthrough — Módulo Financeiro & Integração Gmail (SETEC SOLAR)
+# Walkthrough — Cadastro de Fornecedores de Dataloggers, Módulo Financeiro & Integração Gmail
 
-Fórmula de sucesso na implementação do Módulo Financeiro (contas a pagar/receber) e da Integração de e-mails para leitura e lançamento de faturas via Gmail!
+Fórmula de sucesso na implementação do Módulo Financeiro, Integração Gmail, Integração Growatt OpenAPI v4 e o Cadastro Dinâmico de Fornecedores de Dataloggers!
 
 ---
 
 ## 🛠️ Mudanças Realizadas
 
-### 1. Banco de Dados & Modelos (Prisma/Supabase)
-- **Modelos Criados:**
-  - `FinancialRecord`: Tabela unificada para armazenar transações financeiras do tipo `PAGAR` e `RECEBER`. Contém campos específicos como data de vencimento, entrada de nota/emissão, status (`PENDENTE`, `PAGO`, `VENCIDO`, `ATRASADO`), informações de boletos, observações e vínculo opcional a um `Client` real do sistema.
-  - `GmailAccount`: Tabela para armazenar as credenciais OAuth autorizadas (e-mail, nome do titular e refresh token) das usinas de energia.
-- **Relacionamentos:**
-  - Adicionado o relacionamento `financialRecords` no modelo `Client` para rastreabilidade de mensalidades.
+### 1. Cadastro Dinâmico de Fornecedores de Dataloggers (Novo)
+- **Banco de Dados (Prisma):** 
+  - Criado o modelo `DataloggerSupplier` para armazenar múltiplos fornecedores e suas credenciais específicas (tokens de API, chaves OAuth, e-mails e senhas).
+  - Vinculado o modelo `Usina` à tabela `DataloggerSupplier` com chaves estrangeiras `dataloggerSupplierId` (limpeza inteligente `onDelete: SetNull` para não excluir a usina caso o fornecedor seja apagado).
+- **Backend NestJS:**
+  - Criado o módulo `DataloggerSupplierModule` com endpoints CRUD completos (`/api/datalogger-suppliers`) protegidos com `RoleGuard`.
+  - Refatorado o `SolarmanService` para realizar o polling e testes de conexão de maneira isolada por conta. Se a usina tiver um fornecedor associado no banco, o sistema usa as chaves daquela conta de fornecedor específica (ex: tokens diferentes da Growatt ou credenciais adicionais da Solarman), suportando múltiplos clientes da SETEC sem misturar credenciais.
+- **Frontend React (MUI):**
+  - **Menu Suspenso (Dropdown):** No cadastro e na edição de usinas, o campo de texto livre de fabricante foi substituído por uma Lista Suspensa de fornecedores dinâmicos cadastrados no banco.
+  - **Gerenciador de Fornecedores Inline:** Adicionado o botão "+ Fornecedor" no formulário de usinas. Ele abre um modal completo para a equipe da SETEC gerenciar (criar, listar, editar e deletar) as credenciais da Growatt, Solarman e Modbus local diretamente da tela de cadastro de usinas.
+  - **Identificação Visual:** A tabela de usinas agora mostra entre colchetes a conta/fornecedor configurado (ex: `Growatt SETEC`).
 
-### 2. Backend NestJS
-- **Módulo Financial (`financial`):**
-  - **Serviço:** Gerencia regras de criação, atualização, exclusão e busca. Inclui um método de agregação `getSummary()` que calcula em tempo real o MRR (Previsão de Receita do Mês), receitas recebidas, despesas a pagar e receitas atrasadas/vencidas do mês corrente.
-  - **Controller:** Expõe as rotas REST completas protegidas por `RoleGuard` (permissões para SUPER_ADMIN e GESTOR para alterações de escrita).
-- **Módulo Gmail (`gmail`):**
-  - **Serviço:** Controla a comunicação com a API REST do Gmail usando tokens dinâmicos obtidos pelo refresh token. Implementa um **Modo de Demonstração (Simulado)** que gera e-mails fictícios realistas de faturas se as chaves Google Client ID/Secret não estiverem configuradas no `.env`.
-  - **Controller:** Contém a rota de callback OAuth (redireciona de volta ao frontend com o status de sucesso/erro), listagem de contas de e-mail conectadas, cadastro de e-mails mockados (para simulação) e a busca de e-mails da caixa postal.
-- **Integração com Solarman Cloud API:**
-  - Adicionado suporte completo à API de Nuvem Oficial da Solarman no `SolarmanService` para buscar leituras em tempo real dos inversores.
-  - **Detecção Dinâmica:** Se o campo `datalogger` da usina for preenchido com apenas o número de série (ex: `2375000001`), o sistema consulta a API da Solarman. Se contiver dois pontos (ex: `IP:SN`), ele lê diretamente o WiFi Stick local por Modbus TCP.
-  - **Segurança e Caching:** O token de acesso da Solarman é cacheado por 1.5 horas para evitar requisições de login desnecessárias. A senha da Solarman é enviada criptografada com SHA-256 no backend.
-  - **Ferramenta de Teste:** O endpoint de teste de conexão aceita o IP `cloud` para testar e validar o token e credenciais de nuvem da Solarman.
+### 2. Módulo Financeiro & Integração Gmail
+- **FinancialRecord:** Armazena transações do tipo `PAGAR` e `RECEBER` com vencimentos, parcelas e vínculos a clientes.
+- **GmailAccount:** Armazena conexões de e-mail autorizadas por OAuth.
+- **Dashboard Financeiro:** Gráficos de área com gradientes fluidos e KPIs realistas de MRR e Fluxo de Caixa.
+- **Leitura Automática de E-mails:** Inbox simulado de faturas com ação de "Lançar a partir do e-mail" pré-preenchendo dados de notas.
 
-### 3. Frontend React (MUI / Recharts)
-- **Tela de Finanças (`Financeiro.tsx`):**
-  - **Dashboard:** KPIs integrados com as somas reais da API de MRR, Recebido, Contas a Pagar e Lucro Estimado. Gráfico de área (Recharts) com gradiente fluido mostrando a relação entre receita e despesa ao longo dos últimos 6 meses.
-  - **Abas Contas a Receber & Contas a Pagar:** Tabelas responsivas com paginação, filtros rápidos por status e busca de texto. Dialogs ricos de lançamento financeiro integrados com a lista de clientes reais do sistema.
-  - **Leitor de Faturas (Gmail):**
-    - Permite selecionar a conta de usina solar conectada no menu suspenso.
-    - Se a conta estiver em Modo Simulação ou Real, renderiza um painel estilo Gmail (inbox) mostrando as mensagens de faturas com remetentes destacados.
-    - **Ação Rápida "Lançar a partir do e-mail":** Ao abrir um e-mail de fatura, o sistema extrai o remetente, assunto, snippet e tenta deduzir o valor (R$). Ao clicar em Lançar, abre o dialog de lançamentos já pré-preenchido, automatizando a digitação da despesa ou receita!
-
----
-
-## 🛠️ Growatt OpenAPI v4 Integration (Novo)
-- **Token Configurado:** Preenchemos no `backend/.env` o token público fornecido pela Growatt `{82774gx5t68b8zdei81ux6ov3t5rd4k1}` como `GROWATT_API_TOKEN`.
-- **Detecção Dinâmica:**
-  - Se a usina estiver cadastrada com o fabricante `Growatt` e o campo `datalogger` contiver apenas o serial number (ex: `HPJ0BF20FU` ou `AEC1733378`), o backend realiza a busca automática de dados de geração (potência atual, geração diária, geração acumulada e temperatura) usando a API oficial da Growatt (`openapi.growatt.com/v4/new-api/queryLastData`).
-  - Se contiver `:` (ex: `IP:SN`), a leitura permanece Modbus TCP direta na rede local.
-  - Se for de outro fabricante, o comportamento padrão do `Solarman` é mantido.
-- **Ferramenta de Teste:** O endpoint `/solarman/test` aceita agora `growatt` ou `growattcloud` no campo IP para testar a comunicação com o inversor usando a API da Growatt.
+### 3. Integração Growatt OpenAPI v4
+- Suporte nativo à busca automática de geração (potência ativa, energia acumulada, geração diária e temperatura) usando a API oficial da Growatt se a usina estiver associada a um fornecedor da Growatt.
 
 ---
 
 ## 🧪 Validação e Testes de Build
 
-- **Backend NestJS:** Integrado e compilado com sucesso (`npm run build`).
-- **Esquema do Prisma:** Inalterado e pronto.
+- **Backend NestJS:** Compilação concluída com sucesso (`npm run build`).
+- **Frontend React:** Build de produção gerado com sucesso sem erros de tipagem (`tsc -b && vite build`).
 
 ---
 
-## ⚡ Próximos Passos (Ação do Usuário Localmente)
+## ⚡ Ações do Usuário Localmente (Importante!)
 
-Como a porta direta de PostgreSQL (5432) do Supabase é bloqueada no sandbox da API:
-1. Abra o terminal local na pasta `backend` e execute o comando abaixo para atualizar o banco de dados Supabase com as novas tabelas (caso ainda não tenha feito):
+Como a porta direta de PostgreSQL (5432) do Supabase é protegida no sandbox de desenvolvimento externo:
+1. Abra o terminal local do seu computador na pasta `backend` e execute o comando abaixo para criar a nova tabela de fornecedores no seu banco de dados Supabase:
    ```bash
    npx prisma db push
    ```
@@ -65,5 +47,6 @@ Como a porta direta de PostgreSQL (5432) do Supabase é bloqueada no sandbox da 
    ```bash
    npm run dev
    ```
-3. A configuração do Google OAuth (opcional para e-mails reais) e API da Growatt já estão prontas no `backend/.env`.
+3. Acesse o painel de Usinas e clique no botão "+ Fornecedor" para cadastrar a **Solar Planet** (AISWEI) com o Token `N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09`, ou as contas da **Growatt** e **Solarman**!
+4. A configuração do Google OAuth (opcional para e-mails reais) e API da Growatt já estão prontas no `backend/.env`.
 

@@ -26,20 +26,20 @@ export class SolarmanController {
   }
 
   // POST /solarman/test — testa conexão direta com um datalogger por IP + SN
-  // Body: { ip: string, sn: string }
+  // Body: { ip: string, sn: string, supplierId?: string }
   @Post('test')
-  async testDatalogger(@Body() body: { ip: string; sn: string }) {
-    return this.solarmanService.testConnection(body.ip, body.sn);
+  async testDatalogger(@Body() body: { ip: string; sn: string; supplierId?: string }) {
+    return this.solarmanService.testConnection(body.ip, body.sn, body.supplierId);
   }
 
   // POST /solarman/activate/:usinaId — salva IP:SN no cadastro e inicia monitoramento
-  // Body: { ip: string, sn: string }
+  // Body: { ip: string, sn: string, supplierId?: string }
   @Post('activate/:usinaId')
   async activateMonitoring(
     @Param('usinaId') usinaId: string,
-    @Body() body: { ip: string; sn: string },
+    @Body() body: { ip: string; sn: string; supplierId?: string },
   ) {
-    return this.solarmanService.activateMonitoring(usinaId, body.ip, body.sn);
+    return this.solarmanService.activateMonitoring(usinaId, body.ip, body.sn, body.supplierId);
   }
 
 }

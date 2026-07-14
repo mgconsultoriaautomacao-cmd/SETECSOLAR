@@ -22,7 +22,7 @@ export class UsinaService {
     
     return this.prisma.usina.findMany({
       where,
-      include: { client: true },
+      include: { client: true, dataloggerSupplier: true },
       orderBy: { createdAt: 'desc' },
     });
   }
@@ -30,7 +30,7 @@ export class UsinaService {
   async findOne(user: any, id: string) {
     const usina = await this.prisma.usina.findUnique({
       where: { id },
-      include: { client: true, invoices: true },
+      include: { client: true, invoices: true, dataloggerSupplier: true },
     });
 
     if (!usina) return null;
@@ -66,6 +66,7 @@ export class UsinaService {
         state: data.state || '',
         minEnergyPeak: data.minEnergyPeak !== undefined ? Number(data.minEnergyPeak) : 0,
         maxEnergyPeak: data.maxEnergyPeak !== undefined ? Number(data.maxEnergyPeak) : 0,
+        dataloggerSupplierId: data.dataloggerSupplierId || null,
       },
       include: { client: true },
     });
@@ -96,6 +97,7 @@ export class UsinaService {
         state: data.state,
         minEnergyPeak: data.minEnergyPeak !== undefined ? Number(data.minEnergyPeak) : undefined,
         maxEnergyPeak: data.maxEnergyPeak !== undefined ? Number(data.maxEnergyPeak) : undefined,
+        dataloggerSupplierId: data.dataloggerSupplierId !== undefined ? data.dataloggerSupplierId : undefined,
       },
       include: { client: true },
     });

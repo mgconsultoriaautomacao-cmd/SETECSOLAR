@@ -112,31 +112,33 @@ model Client {
 }
 
 model Usina {
-  id               String      @id @default(uuid())
-  name             String
-  clientId         String
-  client           Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  capacityKwp      Float       // kWp instalado
-  inverterCapacity Float       // Potência do inversor
-  moduleCount      Int         // Quantidade de módulos
-  manufacturer     String      // Fabricante
-  model            String      // Modelo
-  gpsLatitude      Float?
-  gpsLongitude     Float?
-  utilityCompany   String      // Distribuidora
-  estimatedKwh     Float       // kWh projetado
-  paybackYears     Float       // Payback previsto em anos
-  installationDate DateTime
-  approvalDate     DateTime?   // Data de homologação
-  status           UsinaStatus @default(OFFLINE)
-  datalogger       String      @default("")
-  address          String      @default("")
-  city             String      @default("")
-  state            String      @default("")
-  minEnergyPeak    Float       @default(0)
-  maxEnergyPeak    Float       @default(0)
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  id                   String              @id @default(uuid())
+  name                 String
+  clientId             String
+  client               Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  capacityKwp          Float               // kWp instalado
+  inverterCapacity     Float               // Potência do inversor
+  moduleCount          Int                 // Quantidade de módulos
+  manufacturer         String              // Fabricante
+  model                String              // Modelo
+  gpsLatitude          Float?
+  gpsLongitude         Float?
+  utilityCompany       String              // Distribuidora
+  estimatedKwh         Float               // kWh projetado
+  paybackYears         Float               // Payback previsto em anos
+  installationDate     DateTime
+  approvalDate         DateTime?           // Data de homologação
+  status               UsinaStatus         @default(OFFLINE)
+  datalogger           String              @default("")
+  address              String              @default("")
+  city                 String              @default("")
+  state                String              @default("")
+  minEnergyPeak        Float               @default(0)
+  maxEnergyPeak        Float               @default(0)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  dataloggerSupplierId String?
+  dataloggerSupplier   DataloggerSupplier? @relation(fields: [dataloggerSupplierId], references: [id], onDelete: SetNull)
 
   // Relacionamentos
   invoices    Invoice[]
@@ -234,4 +236,19 @@ model GmailAccount {
   refreshToken String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model DataloggerSupplier {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  type      String
+  token     String?
+  appId     String?
+  appSecret String?
+  username  String?
+  password  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usinas Usina[]
 }

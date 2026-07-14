@@ -15,8 +15,8 @@ export class GrowattService {
   private readonly logger = new Logger(GrowattService.name);
   private readonly baseUrl = 'https://openapi.growatt.com';
 
-  private getHeaders(): Record<string, string> {
-    const token = process.env.GROWATT_API_TOKEN || '82774gx5t68b8zdei81ux6ov3t5rd4k1';
+  private getHeaders(customToken?: string): Record<string, string> {
+    const token = customToken || process.env.GROWATT_API_TOKEN || '82774gx5t68b8zdei81ux6ov3t5rd4k1';
     return {
       'token': token,
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -24,9 +24,9 @@ export class GrowattService {
     };
   }
 
-  async readUsinaFromCloud(deviceSn: string, deviceType: string = 'inv'): Promise<GrowattReading | null> {
+  async readUsinaFromCloud(deviceSn: string, deviceType: string = 'inv', customToken?: string): Promise<GrowattReading | null> {
     try {
-      const headers = this.getHeaders();
+      const headers = this.getHeaders(customToken);
       const body = qs.stringify({
         deviceType,
         deviceSn,

@@ -9,6 +9,7 @@ import { WorkOrderModule } from './work-order/work-order.module';
 import { TicketModule } from './ticket/ticket.module';
 import { FinancialModule } from './financial/financial.module';
 import { GmailModule } from './gmail/gmail.module';
+import { DataloggerSupplierModule } from './datalogger-supplier/datalogger-supplier.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { GmailModule } from './gmail/gmail.module';
     TicketModule,
     FinancialModule,
     GmailModule,
+    DataloggerSupplierModule,
   ],
   controllers: [AppController],
   providers: [AppService],
