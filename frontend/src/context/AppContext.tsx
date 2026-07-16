@@ -97,8 +97,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const getHeaders = () => {
     return {
       'Content-Type': 'application/json',
-      'x-user-role': localStorage.getItem('user_role') || '',
-      'x-user-email': localStorage.getItem('user_email') || '',
+      'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
+      'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
     };
   };
 

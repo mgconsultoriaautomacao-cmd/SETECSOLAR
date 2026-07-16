@@ -571,7 +571,8 @@ export class SolarmanService implements OnModuleInit {
           cleanDatalogger,
           supplier.appId,
           supplier.appSecret,
-          supplier.token
+          supplier.token,
+          supplier.apiKey
         );
         if (solplanetData) {
           return {
@@ -796,7 +797,8 @@ export class SolarmanService implements OnModuleInit {
         sn,
         supplier.appId,
         supplier.appSecret,
-        supplier.token
+        supplier.token,
+        supplier.apiKey
       );
       if (solplanetData) {
         return {

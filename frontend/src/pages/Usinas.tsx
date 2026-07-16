@@ -84,6 +84,7 @@ export default function Usinas() {
     token: '',
     appId: '',
     appSecret: '',
+    apiKey: '',
     username: '',
     password: '',
   });
@@ -96,6 +97,7 @@ export default function Usinas() {
       token: '',
       appId: '',
       appSecret: '',
+      apiKey: '',
       username: '',
       password: '',
     });
@@ -107,7 +109,8 @@ export default function Usinas() {
       extraFields = {
         appId: '205024856',
         appSecret: 'QT3qSt0ntxTI8JminCull8p2066zCDnZ',
-        token: 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09'
+        token: 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09',
+        apiKey: ''
       };
     } else if (type === 'GROWATT_CLOUD') {
       extraFields = {
@@ -137,6 +140,7 @@ export default function Usinas() {
       token: supplier.token || '',
       appId: supplier.appId || '',
       appSecret: supplier.appSecret || '',
+      apiKey: supplier.apiKey || '',
       username: supplier.username || '',
       password: supplier.password || '',
     });
@@ -967,13 +971,24 @@ export default function Usinas() {
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
-                  <Grid size={12}>
+                  <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="API Token (Solplanet)"
+                      label="API Token / Pro Token (Solplanet)"
                       fullWidth
                       value={supplierForm.token}
                       onChange={e => setSupplierForm({ ...supplierForm, token: e.target.value })}
                       placeholder="Ex: N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="API Key do Inversor (Solplanet)"
+                      fullWidth
+                      value={supplierForm.apiKey}
+                      onChange={e => setSupplierForm({ ...supplierForm, apiKey: e.target.value })}
+                      placeholder="Chave específica do inversor (opcional se igual ao Token)"
+                      helperText="Encontre em: Account > Safety settings > API authorization code (2ª coluna)"
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
