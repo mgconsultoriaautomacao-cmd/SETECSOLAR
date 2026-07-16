@@ -101,6 +101,34 @@ export default function Usinas() {
     });
   };
 
+  const handleTypeChange = (type: string) => {
+    let extraFields = {};
+    if (type === 'SOLPLANET_CLOUD') {
+      extraFields = {
+        appId: '205024856',
+        appSecret: 'QT3qSt0ntxTI8JminCull8p2066zCDnZ',
+        token: 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09'
+      };
+    } else if (type === 'GROWATT_CLOUD') {
+      extraFields = {
+        token: '82774gx5t68b8zdei81ux6ov3t5rd4k1',
+        appId: '',
+        appSecret: '',
+        username: '',
+        password: ''
+      };
+    } else {
+      extraFields = {
+        appId: '',
+        appSecret: '',
+        token: '',
+        username: '',
+        password: ''
+      };
+    }
+    setSupplierForm(prev => ({ ...prev, type, ...extraFields }));
+  };
+
   const handleOpenEditSupplier = (supplier: any) => {
     setEditingSupplier(supplier);
     setSupplierForm({
@@ -852,7 +880,7 @@ export default function Usinas() {
                     value={supplierForm.type}
                     label="Tipo de Conexão"
                     notched
-                    onChange={e => setSupplierForm({ ...supplierForm, type: e.target.value })}
+                    onChange={e => handleTypeChange(e.target.value)}
                   >
                     <MenuItem value="GROWATT_CLOUD">Growatt OpenAPI Cloud</MenuItem>
                     <MenuItem value="SOLARMAN_CLOUD">Solarman OpenAPI Cloud</MenuItem>
