@@ -24,8 +24,13 @@ Fórmula de sucesso na implementação do Módulo Financeiro, Integração Gmail
 - **Dashboard Financeiro:** Gráficos de área com gradientes fluidos e KPIs realistas de MRR e Fluxo de Caixa.
 - **Leitura Automática de E-mails:** Inbox simulado de faturas com ação de "Lançar a partir do e-mail" pré-preenchendo dados de notas.
 
-### 3. Integração Growatt OpenAPI v4
-- Suporte nativo à busca automática de geração (potência ativa, energia acumulada, geração diária e temperatura) usando a API oficial da Growatt se a usina estiver associada a um fornecedor da Growatt.
+### 3. Integração Growatt OpenAPI v4 & Solplanet Cloud API (Novo)
+- **Growatt:** Suporte nativo à busca automática de geração usando a API oficial da Growatt se a usina estiver associada a um fornecedor da Growatt.
+- **Solplanet (Solar Planet / AISWEI):** 
+  - Criado o `SolplanetService` que encapsula chamadas à API da Solplanet (`https://api.general.aisweicloud.com/getInverter`).
+  - Implementado o algoritmo de assinatura segura `HMAC-SHA256` exigido pela Alibaba Cloud API Gateway da Solplanet (enviando `X-Ca-Key`, `X-Ca-Signature` e ordenação alfabética de parâmetros).
+  - Se a usina estiver vinculada a um fornecedor do tipo `SOLPLANET_CLOUD`, o backend realiza automaticamente o polling e testes usando o `AppKey`, `AppSecret` e `Token` configurados da Solplanet.
+  - O endpoint `/solarman/test` aceita `solplanet` ou `solplanetcloud` no campo IP para testar a comunicação direta com os servidores da Solplanet usando as chaves de acesso.
 
 ---
 

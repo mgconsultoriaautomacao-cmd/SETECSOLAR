@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
 import { GrowattService } from './growatt.service';
+import { SolplanetService } from './solplanet.service';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocolo SolarmanV5 — leitura direta no WiFi Stick pela rede local/internet
@@ -324,6 +325,7 @@ export class SolarmanService implements OnModuleInit {
   constructor(
     private prisma: PrismaService,
     private growattService: GrowattService,
+    private solplanetService: SolplanetService,
   ) {}
 
   private async getCloudToken(supplier?: any): Promise<string | null> {
@@ -563,6 +565,36 @@ export class SolarmanService implements OnModuleInit {
           errorMessage: `Sem resposta da Solarman Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
         };
       }
+
+      if (supplier.type === 'SOLPLANET_CLOUD' || supplier.type === 'SOLAR_PLANET_CLOUD') {
+        const solplanetData = await this.solplanetService.readUsinaFromCloud(
+          cleanDatalogger,
+          supplier.appId,
+          supplier.appSecret,
+          supplier.token
+        );
+        if (solplanetData) {
+          return {
+            usinaId, usinaNome, deviceSn: cleanDatalogger,
+            ipAddress: 'Solplanet Cloud API',
+            powerNow: solplanetData.powerNow,
+            generationToday: solplanetData.generationToday,
+            generationTotal: solplanetData.generationTotal,
+            gridVoltage: null, gridFrequency: null,
+            temperature: null, dcPower: null,
+            status: solplanetData.status === 'ONLINE' ? 'ONLINE' : 'OFFLINE',
+            lastUpdate: new Date(),
+          };
+        }
+        return {
+          usinaId, usinaNome, deviceSn: cleanDatalogger,
+          ipAddress: 'Solplanet Cloud',
+          powerNow: null, generationToday: null, generationTotal: null,
+          gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+          status: 'OFFLINE', lastUpdate: new Date(),
+          errorMessage: `Sem resposta da Solplanet Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
+        };
+      }
     }
 
     // Se NÃO contém dois pontos (:), tenta ler via Solarman Cloud API legado (Global)
@@ -749,6 +781,39 @@ export class SolarmanService implements OnModuleInit {
       return {
         success: false,
         message: `Erro ao conectar via Growatt API. Verifique se o S/N está correto e se as credenciais do fornecedor/env estão configuradas.`,
+      };
+    }
+
+    // Se o IP for igual a "solplanet" ou "solplanetcloud", tenta testar via API Solplanet
+    if (ip.toLowerCase() === 'solplanet' || ip.toLowerCase() === 'solplanetcloud') {
+      if (!supplier) {
+        return {
+          success: false,
+          message: `Para testar Solplanet Cloud, selecione o fornecedor configurado com AppKey/AppSecret/Token.`,
+        };
+      }
+      const solplanetData = await this.solplanetService.readUsinaFromCloud(
+        sn,
+        supplier.appId,
+        supplier.appSecret,
+        supplier.token
+      );
+      if (solplanetData) {
+        return {
+          success: true,
+          message: `✅ Datalogger conectado via Solplanet API com sucesso!`,
+          discoveredIp: 'Solplanet Cloud',
+          data: {
+            powerNow: solplanetData.powerNow,
+            generationToday: solplanetData.generationToday,
+            generationTotal: solplanetData.generationTotal,
+            status: solplanetData.status,
+          } as any
+        };
+      }
+      return {
+        success: false,
+        message: `Erro ao conectar via Solplanet API. Verifique se o S/N está correto e se as credenciais do fornecedor "${supplier.name}" estão configuradas.`,
       };
     }
 

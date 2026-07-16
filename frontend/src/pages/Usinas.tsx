@@ -856,6 +856,7 @@ export default function Usinas() {
                   >
                     <MenuItem value="GROWATT_CLOUD">Growatt OpenAPI Cloud</MenuItem>
                     <MenuItem value="SOLARMAN_CLOUD">Solarman OpenAPI Cloud</MenuItem>
+                    <MenuItem value="SOLPLANET_CLOUD">Solplanet Cloud API</MenuItem>
                     <MenuItem value="MODBUS_LOCAL">Modbus TCP Direto (Local)</MenuItem>
                   </Select>
                 </FormControl>
@@ -910,6 +911,41 @@ export default function Usinas() {
                       fullWidth
                       value={supplierForm.password}
                       onChange={e => setSupplierForm({ ...supplierForm, password: e.target.value })}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                </>
+              )}
+
+              {supplierForm.type === 'SOLPLANET_CLOUD' && (
+                <>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="AppKey (Solplanet)"
+                      fullWidth
+                      value={supplierForm.appId}
+                      onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
+                      placeholder="Ex: 205024856"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="App Secret (Solplanet)"
+                      fullWidth
+                      value={supplierForm.appSecret}
+                      onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value })}
+                      placeholder="Ex: QT3qSt0ntxTI8JminCull8p20..."
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={12}>
+                    <TextField
+                      label="API Token (Solplanet)"
+                      fullWidth
+                      value={supplierForm.token}
+                      onChange={e => setSupplierForm({ ...supplierForm, token: e.target.value })}
+                      placeholder="Ex: N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09"
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
