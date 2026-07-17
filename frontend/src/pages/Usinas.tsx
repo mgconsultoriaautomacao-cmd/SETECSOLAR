@@ -47,7 +47,7 @@ const getHeaders = () => ({
 });
 
 export default function Usinas() {
-  const { usinas, clients, addUsina, updateUsina, deleteUsina, suppliers, addSupplier, updateSupplier, deleteSupplier } = useApp();
+  const { usinas, clients, addUsina, updateUsina, deleteUsina, suppliers, addSupplier, updateSupplier, deleteSupplier, refreshData } = useApp();
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editingUsina, setEditingUsina] = useState<Usina | null>(null);
@@ -118,6 +118,8 @@ export default function Usinas() {
       });
       const data = await r.json();
       setSyncResult(data);
+      // Recarrega os dados do app para refletir a sincronização imediatamente na interface
+      await refreshData();
     } catch (err: any) {
       setSyncResult({ errors: [err.message || 'Erro ao sincronizar.'], created: 0, skipped: 0, updated: 0, details: [] });
     } finally {

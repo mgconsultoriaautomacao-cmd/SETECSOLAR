@@ -19,6 +19,8 @@ export interface GrowattPlant {
   createDate: string;
   currentPower: string;    // kW
   totalEnergy: string;     // kWh
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
 }
 
 export interface GrowattDevice {
@@ -85,6 +87,8 @@ export class GrowattService {
           createDate: p.create_date || p.createDate || '',
           currentPower: String(p.current_power || p.currentPower || '0'),
           totalEnergy: String(p.total_energy || p.totalEnergy || '0'),
+          gpsLatitude: p.latitude ? parseFloat(p.latitude) : null,
+          gpsLongitude: p.longitude ? parseFloat(p.longitude) : null,
         }));
       } else {
         this.logger.warn(`Resposta inesperada de /v1/plant/list: ${JSON.stringify(response.data)}`);
@@ -163,59 +167,50 @@ export class GrowattService {
   async readUsinaFromCloud(deviceSn: string, deviceType: string = 'inv', customToken?: string): Promise<GrowattReading | null> {
     try {
       const headers = this.getHeaders(customToken);
-      const today = new Date().toISOString().split('T')[0];
 
-      // Tenta buscar usando a API V1
-      const response = await axios.get(`${this.defaultBaseUrl}/v1/device/inverter/data`, {
+      // Busca usando a API V1 last_new_data para obter os dados reais mais recentes
+      const response = await axios.get(`${this.defaultBaseUrl}/v1/device/inverter/last_new_data`, {
         headers,
         params: {
           device_sn: deviceSn,
-          start_date: today,
-          end_date: today,
         },
       });
 
       if (response.data && response.data.error_code === 0 && response.data.data) {
         const data = response.data.data;
-        const datas = data.datas || data.data || [];
-        
-        if (datas && datas.length > 0) {
-          // Pega a última leitura do dia
-          const lastReading = datas[datas.length - 1];
 
-          // power = potência atual (Watts). Converter para kW
-          const powerNow = lastReading.power !== undefined && lastReading.power !== null
-            ? parseFloat(lastReading.power) / 1000 
-            : null;
+        // pac = potência atual (Watts). Converter para kW
+        const powerNow = data.pac !== undefined && data.pac !== null
+          ? parseFloat(data.pac) / 1000 
+          : null;
 
-          // today_energy (kWh)
-          const generationToday = lastReading.today_energy !== undefined && lastReading.today_energy !== null
-            ? parseFloat(lastReading.today_energy) 
-            : null;
+        // powerToday (kWh)
+        const generationToday = data.powerToday !== undefined && data.powerToday !== null
+          ? parseFloat(data.powerToday) 
+          : null;
 
-          // total_energy (kWh)
-          const generationTotal = lastReading.total_energy !== undefined && lastReading.total_energy !== null
-            ? parseFloat(lastReading.total_energy) 
-            : null;
+        // powerTotal (kWh)
+        const generationTotal = data.powerTotal !== undefined && data.powerTotal !== null
+          ? parseFloat(data.powerTotal) 
+          : null;
 
-          // temperature (°C)
-          const temperature = lastReading.temperature !== undefined && lastReading.temperature !== null
-            ? parseFloat(lastReading.temperature) 
-            : null;
+        // temperature (°C)
+        const temperature = data.temperature !== undefined && data.temperature !== null
+          ? parseFloat(data.temperature) 
+          : null;
 
-          const statusRaw = lastReading.status;
-          let status: 'ONLINE' | 'OFFLINE' | 'FAULT' = 'ONLINE';
-          if (statusRaw === 0) status = 'OFFLINE';
-          if (statusRaw === 3) status = 'FAULT';
+        const statusRaw = data.status;
+        let status: 'ONLINE' | 'OFFLINE' | 'FAULT' = 'ONLINE';
+        if (statusRaw === 0) status = 'OFFLINE';
+        if (statusRaw === 3) status = 'FAULT';
 
-          return {
-            powerNow,
-            generationToday,
-            generationTotal,
-            temperature,
-            status,
-          };
-        }
+        return {
+          powerNow,
+          generationToday,
+          generationTotal,
+          temperature,
+          status,
+        };
       } else {
         this.logger.warn(`Erro na resposta da Growatt API para ${deviceSn}: ${JSON.stringify(response.data)}`);
       }

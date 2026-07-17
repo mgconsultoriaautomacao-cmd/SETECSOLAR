@@ -1028,7 +1028,7 @@ export class SolarmanService implements OnModuleInit {
     // Busca todas as usinas existentes para verificar duplicatas
     const existingUsinas = await this.prisma.usina.findMany({
       where: { clientId: targetClientId },
-      select: { id: true, datalogger: true, name: true },
+      select: { id: true, datalogger: true, name: true, gpsLatitude: true, gpsLongitude: true },
     });
 
     // Busca ou cria o fornecedor Growatt Cloud
@@ -1089,6 +1089,8 @@ export class SolarmanService implements OnModuleInit {
               state: '',
               address: '',
               dataloggerSupplierId: growattSupplierId,
+              gpsLatitude: plant.gpsLatitude || null,
+              gpsLongitude: plant.gpsLongitude || null,
             },
           });
           result.created++;
@@ -1112,6 +1114,9 @@ export class SolarmanService implements OnModuleInit {
         ? `${device.plantName} — ${deviceSn}`
         : `Growatt ${deviceSn}`;
 
+      // Busca info da planta correspondente
+      const plant = discovery.plants.find(p => p.plantId === device.plantId);
+
       // Verifica se já existe uma usina com este device_sn no datalogger
       const existing = existingUsinas.find(u => 
         u.datalogger === deviceSn || 
@@ -1127,6 +1132,8 @@ export class SolarmanService implements OnModuleInit {
             data: {
               datalogger: deviceSn,
               dataloggerSupplierId: growattSupplierId,
+              gpsLatitude: plant?.gpsLatitude || existing.gpsLatitude || null,
+              gpsLongitude: plant?.gpsLongitude || existing.gpsLongitude || null,
             },
           });
           result.updated++;
@@ -1137,9 +1144,6 @@ export class SolarmanService implements OnModuleInit {
         }
         continue;
       }
-
-      // Busca info da planta correspondente
-      const plant = discovery.plants.find(p => p.plantId === device.plantId);
 
       try {
         await this.prisma.usina.create({
@@ -1161,6 +1165,8 @@ export class SolarmanService implements OnModuleInit {
             state: '',
             address: '',
             dataloggerSupplierId: growattSupplierId,
+            gpsLatitude: plant?.gpsLatitude || null,
+            gpsLongitude: plant?.gpsLongitude || null,
           },
         });
         result.created++;
