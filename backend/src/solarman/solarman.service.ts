@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
-import { GrowattService, GrowattDiscoveryResult } from './growatt.service';
+import { GrowattService, GrowattDiscoveryResult, GrowattDevice } from './growatt.service';
 import { SolplanetService } from './solplanet.service';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1123,8 +1123,18 @@ export class SolarmanService implements OnModuleInit {
       }
     }
 
-    // Cria usinas a partir dos dispositivos
+    // Deduplica os dispositivos por SN para evitar duplicidade (já que a Growatt retorna o inversor e o wifi stick com o mesmo SN)
+    const uniqueDevices: GrowattDevice[] = [];
+    const seenSns = new Set<string>();
     for (const device of discovery.devices) {
+      if (device.deviceSn && !seenSns.has(device.deviceSn)) {
+        seenSns.add(device.deviceSn);
+        uniqueDevices.push(device);
+      }
+    }
+
+    // Cria usinas a partir dos dispositivos
+    for (const device of uniqueDevices) {
       const deviceSn = device.deviceSn;
       if (!deviceSn) {
         result.errors.push(`Dispositivo sem serial number na planta ${device.plantId} — ignorado.`);
