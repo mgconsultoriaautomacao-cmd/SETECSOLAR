@@ -978,29 +978,8 @@ export class SolarmanService implements OnModuleInit {
 
     let targetClientId = clientId;
 
-    // Se não forneceu um cliente, busca o primeiro existente ou cria um padrão
-    if (!targetClientId) {
-      const firstClient = await this.prisma.client.findFirst();
-      if (firstClient) {
-        targetClientId = firstClient.id;
-      } else {
-        const newClient = await this.prisma.client.create({
-          data: {
-            name: 'Cliente Padrão (Importação)',
-            email: `importacao_${Date.now()}@local`,
-            document: `000000000${Math.floor(Math.random() * 1000)}`,
-            phone: '00000000000',
-            whatsapp: '00000000000',
-            zipCode: '00000000',
-            address: 'Endereço Importação',
-            city: 'Cidade',
-            state: 'UF',
-            installationDate: new Date(),
-          }
-        });
-        targetClientId = newClient.id;
-      }
-    } else {
+    // O ID do cliente será definido por planta caso não seja fornecido um targetClientId global
+    if (targetClientId) {
       // Verifica se o cliente existe
       const client = await this.prisma.client.findUnique({ where: { id: targetClientId } });
       if (!client) {
@@ -1027,9 +1006,37 @@ export class SolarmanService implements OnModuleInit {
 
     // Busca todas as usinas existentes para verificar duplicatas
     const existingUsinas = await this.prisma.usina.findMany({
-      where: { clientId: targetClientId },
-      select: { id: true, datalogger: true, name: true, gpsLatitude: true, gpsLongitude: true },
+      select: { id: true, datalogger: true, name: true, gpsLatitude: true, gpsLongitude: true, clientId: true },
     });
+
+    // Helper para mapear ou criar cliente por planta
+    const getOrCreateClientForPlant = async (plantName: string): Promise<string> => {
+      if (targetClientId) return targetClientId; // Se forçado, usa o forçado
+
+      // Busca um cliente existente com o mesmo nome
+      const existingClient = await this.prisma.client.findFirst({
+        where: { name: plantName }
+      });
+      if (existingClient) return existingClient.id;
+
+      // Cria um novo cliente
+      const newClient = await this.prisma.client.create({
+        data: {
+          name: plantName,
+          email: `importacao_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
+          document: `000000000${Math.floor(Math.random() * 1000)}`,
+          phone: '00000000000',
+          whatsapp: '00000000000',
+          zipCode: '00000000',
+          address: 'Importado via API Growatt',
+          city: 'Importado',
+          state: 'XX',
+          installationDate: new Date(),
+        }
+      });
+      this.logger.log(`👤 Cliente criado automaticamente: "${plantName}"`);
+      return newClient.id;
+    };
 
     // Busca ou cria o fornecedor Growatt Cloud
     let growattSupplierId = supplierId;
@@ -1070,10 +1077,11 @@ export class SolarmanService implements OnModuleInit {
         }
 
         try {
+          const plantClientId = await getOrCreateClientForPlant(plantName);
           await this.prisma.usina.create({
             data: {
               name: plantName,
-              clientId: targetClientId,
+              clientId: plantClientId,
               capacityKwp: parseFloat(plant.peakPower) || 0,
               inverterCapacity: parseFloat(plant.peakPower) || 0,
               moduleCount: 0,
@@ -1127,9 +1135,11 @@ export class SolarmanService implements OnModuleInit {
       if (existing) {
         // Atualiza o fornecedor se necessário
         try {
+          const plantClientId = await getOrCreateClientForPlant(plant?.name || 'Cliente Desconhecido');
           await this.prisma.usina.update({
             where: { id: existing.id },
             data: {
+              clientId: plantClientId, // Atualiza para o cliente correto
               datalogger: deviceSn,
               dataloggerSupplierId: growattSupplierId,
               gpsLatitude: plant?.gpsLatitude || existing.gpsLatitude || null,
@@ -1146,10 +1156,11 @@ export class SolarmanService implements OnModuleInit {
       }
 
       try {
+        const plantClientId = await getOrCreateClientForPlant(plant?.name || 'Cliente Desconhecido');
         await this.prisma.usina.create({
           data: {
             name: usinaName,
-            clientId: targetClientId,
+            clientId: plantClientId,
             capacityKwp: plant ? parseFloat(plant.peakPower) || 0 : 0,
             inverterCapacity: plant ? parseFloat(plant.peakPower) || 0 : 0,
             moduleCount: 0,
