@@ -163,50 +163,50 @@ export class GrowattService {
   async readUsinaFromCloud(deviceSn: string, deviceType: string = 'inv', customToken?: string): Promise<GrowattReading | null> {
     try {
       const headers = this.getHeaders(customToken);
-      const body = qs.stringify({
-        deviceType,
-        deviceSn,
+      const today = new Date().toISOString().split('T')[0];
+
+      // Tenta buscar usando a API V1
+      const response = await axios.get(`${this.defaultBaseUrl}/v1/device/inverter/data`, {
+        headers,
+        params: {
+          device_sn: deviceSn,
+          start_date: today,
+          end_date: today,
+        },
       });
 
-      const response = await axios.post(
-        `${this.defaultBaseUrl}/v4/new-api/queryLastData`,
-        body,
-        { headers }
-      );
+      if (response.data && response.data.error_code === 0 && response.data.data) {
+        const data = response.data.data;
+        const datas = data.datas || data.data || [];
+        
+        if (datas && datas.length > 0) {
+          // Pega a última leitura do dia
+          const lastReading = datas[datas.length - 1];
 
-      if (response.data && response.data.code === 0 && response.data.data) {
-        // A API da Growatt retorna os dados indexados pelo SN do aparelho
-        const snData = response.data.data[deviceSn];
-        if (snData) {
-          // Extrai o pac (Output power (W)) e converte para kW
-          const powerNow = snData.pac !== undefined && snData.pac !== null
-            ? parseFloat(snData.pac) / 1000 
+          // power = potência atual (Watts). Converter para kW
+          const powerNow = lastReading.power !== undefined && lastReading.power !== null
+            ? parseFloat(lastReading.power) / 1000 
             : null;
 
-          // Extrai o powerToday (Power generated today (kWh))
-          const generationToday = snData.powerToday !== undefined && snData.powerToday !== null
-            ? parseFloat(snData.powerToday) 
+          // today_energy (kWh)
+          const generationToday = lastReading.today_energy !== undefined && lastReading.today_energy !== null
+            ? parseFloat(lastReading.today_energy) 
             : null;
 
-          // Extrai o powerTotal (Total power generated (kWh))
-          const generationTotal = snData.powerTotal !== undefined && snData.powerTotal !== null
-            ? parseFloat(snData.powerTotal) 
+          // total_energy (kWh)
+          const generationTotal = lastReading.total_energy !== undefined && lastReading.total_energy !== null
+            ? parseFloat(lastReading.total_energy) 
             : null;
 
-          // Extrai a temperatura do inversor (°C)
-          const temperature = snData.temperature !== undefined && snData.temperature !== null
-            ? parseFloat(snData.temperature) 
+          // temperature (°C)
+          const temperature = lastReading.temperature !== undefined && lastReading.temperature !== null
+            ? parseFloat(lastReading.temperature) 
             : null;
 
-          // Define status baseado na chave status do Growatt (0: Waiting, 1: Normal, 3: Fault) ou lost: true
-          const rawStatus = snData.status;
+          const statusRaw = lastReading.status;
           let status: 'ONLINE' | 'OFFLINE' | 'FAULT' = 'ONLINE';
-          
-          if (rawStatus === 3) {
-            status = 'FAULT';
-          } else if (snData.lost === true || snData.lost === 'true') {
-            status = 'OFFLINE';
-          }
+          if (statusRaw === 0) status = 'OFFLINE';
+          if (statusRaw === 3) status = 'FAULT';
 
           return {
             powerNow,
@@ -220,7 +220,7 @@ export class GrowattService {
         this.logger.warn(`Erro na resposta da Growatt API para ${deviceSn}: ${JSON.stringify(response.data)}`);
       }
     } catch (err: any) {
-      this.logger.error(`Erro ao buscar dados do device ${deviceSn} via Growatt API:`, err.message);
+      this.logger.error(`Erro ao buscar dados do device ${deviceSn} via Growatt API: ${err.message}`);
     }
     return null;
   }
