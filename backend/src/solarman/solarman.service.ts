@@ -474,6 +474,12 @@ export class SolarmanService implements OnModuleInit {
       } catch (e) {
         // ignora erros de banco para não bloquear o polling
       }
+
+      // Se for um fornecedor de Cloud (Growatt, Solarman, Solplanet), aguarda 3 segundos para evitar rate limit (error_frequently_access)
+      if (usina.dataloggerSupplier && usina.dataloggerSupplier.type.includes('CLOUD')) {
+        this.logger.debug(`Aguardando 3s para a próxima usina do tipo Cloud...`);
+        await new Promise(resolve => setTimeout(resolve, 3500));
+      }
     }
   }
 
@@ -514,6 +520,13 @@ export class SolarmanService implements OnModuleInit {
     // Se houver fornecedor associado no banco
     if (supplier && !cleanDatalogger.includes(':')) {
       if (supplier.type === 'GROWATT_CLOUD') {
+        // Cache de 5 minutos para evitar "error_frequently_access" (10012) da Growatt API
+        const cached = this.readings.get(usinaId);
+        if (cached && cached.status !== 'OFFLINE' && cached.powerNow !== null && (Date.now() - new Date(cached.lastUpdate).getTime() < 5 * 60 * 1000)) {
+          this.logger.debug(`⚡ Usando dados em cache para usina Growatt: ${usinaNome}`);
+          return cached;
+        }
+
         const growattData = await this.growattService.readUsinaFromCloud(cleanDatalogger, 'inv', supplier.token);
         if (growattData) {
           return {
