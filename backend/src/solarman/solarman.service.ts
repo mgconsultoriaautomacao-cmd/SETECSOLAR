@@ -460,7 +460,7 @@ export class SolarmanService implements OnModuleInit {
       const reading = await this.readUsina(usina.id, usina.name, usina.datalogger, usina.dataloggerSupplier);
       this.readings.set(usina.id, reading);
 
-      // Atualiza status no banco
+      // Atualiza status e leituras no banco para compatibilidade com Serverless/Vercel
       const dbStatus =
         reading.status === 'ONLINE' ? 'ONLINE'
         : reading.status === 'FAULT' ? 'CRITICAL'
@@ -469,16 +469,23 @@ export class SolarmanService implements OnModuleInit {
       try {
         await this.prisma.usina.update({
           where: { id: usina.id },
-          data: { status: dbStatus },
+          data: {
+            status: dbStatus,
+            powerNow: reading.powerNow,
+            generationToday: reading.generationToday,
+            generationTotal: reading.generationTotal,
+            temperature: reading.temperature,
+            readingLastUpdate: new Date(),
+          },
         });
       } catch (e) {
-        // ignora erros de banco para não bloquear o polling
+        this.logger.error(`Erro ao atualizar usina ${usina.name} no banco: ${e.message}`);
       }
 
-      // Se for um fornecedor de Cloud (Growatt, Solarman, Solplanet), aguarda 3 segundos para evitar rate limit (error_frequently_access)
+      // Se for um fornecedor de Cloud (Growatt, Solarman, Solplanet), aguarda 1.8 segundos para evitar rate limit (error_frequently_access)
       if (usina.dataloggerSupplier && usina.dataloggerSupplier.type.includes('CLOUD')) {
-        this.logger.debug(`Aguardando 3s para a próxima usina do tipo Cloud...`);
-        await new Promise(resolve => setTimeout(resolve, 3500));
+        this.logger.debug(`Aguardando 1.8s para a próxima usina do tipo Cloud...`);
+        await new Promise(resolve => setTimeout(resolve, 1800));
       }
     }
   }
@@ -716,12 +723,48 @@ export class SolarmanService implements OnModuleInit {
   }
 
   // ─── Getters para o controller ──────────────────────────────────────────────
-  getAllReadings(): DeviceReading[] {
-    return Array.from(this.readings.values());
+  async getAllReadings(): Promise<DeviceReading[]> {
+    const usinas = await this.prisma.usina.findMany({
+      where: { datalogger: { not: '' } },
+    });
+
+    return usinas.map(u => ({
+      usinaId: u.id,
+      usinaNome: u.name,
+      deviceSn: u.datalogger,
+      ipAddress: u.datalogger.includes(':') ? 'Modbus TCP' : 'Cloud API',
+      powerNow: u.powerNow,
+      generationToday: u.generationToday,
+      generationTotal: u.generationTotal,
+      gridVoltage: null,
+      gridFrequency: null,
+      temperature: u.temperature,
+      dcPower: null,
+      status: u.status as any,
+      lastUpdate: u.readingLastUpdate || u.updatedAt,
+    }));
   }
 
-  getReading(usinaId: string): DeviceReading | undefined {
-    return this.readings.get(usinaId);
+  async getReading(usinaId: string): Promise<DeviceReading | undefined> {
+    const u = await this.prisma.usina.findUnique({
+      where: { id: usinaId }
+    });
+    if (!u) return undefined;
+    return {
+      usinaId: u.id,
+      usinaNome: u.name,
+      deviceSn: u.datalogger,
+      ipAddress: u.datalogger.includes(':') ? 'Modbus TCP' : 'Cloud API',
+      powerNow: u.powerNow,
+      generationToday: u.generationToday,
+      generationTotal: u.generationTotal,
+      gridVoltage: null,
+      gridFrequency: null,
+      temperature: u.temperature,
+      dcPower: null,
+      status: u.status as any,
+      lastUpdate: u.readingLastUpdate || u.updatedAt,
+    };
   }
 
   async forceRefresh(): Promise<DeviceReading[]> {
@@ -1213,9 +1256,17 @@ export class SolarmanService implements OnModuleInit {
 
     this.logger.log(`📊 Sincronização concluída: ${result.created} criadas, ${result.updated} atualizadas, ${result.skipped} ignoradas.`);
 
-    // Dispara polling imediato para atualizar as leituras
+    this.logger.log(`📊 Sincronização concluída: ${result.created} criadas, ${result.updated} atualizadas, ${result.skipped} ignoradas.`);
+
+    // Em ambiente Serverless (Vercel), precisamos rodar o polling IMEDIATAMENTE e de forma síncrona
+    // para atualizar as leituras e salvá-las no banco antes do término da requisição HTTP
     if (result.created > 0 || result.updated > 0) {
-      setTimeout(() => this.pollAll(), 3000);
+      try {
+        this.logger.log(`🔄 Iniciando polling síncrono imediato pós-sincronização...`);
+        await this.pollAll();
+      } catch (err: any) {
+        this.logger.error(`Erro ao rodar polling imediato: ${err.message}`);
+      }
     }
 
     return result;

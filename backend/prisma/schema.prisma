@@ -140,6 +140,13 @@ model Usina {
   dataloggerSupplierId String?
   dataloggerSupplier   DataloggerSupplier? @relation(fields: [dataloggerSupplierId], references: [id], onDelete: SetNull)
 
+  // Campos para persistência de monitoramento (compatível com Serverless/Vercel)
+  powerNow          Float?
+  generationToday   Float?
+  generationTotal   Float?
+  temperature       Float?
+  readingLastUpdate DateTime?
+
   // Relacionamentos
   invoices    Invoice[]
   workOrders  WorkOrder[]
