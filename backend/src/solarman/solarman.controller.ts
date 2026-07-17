@@ -51,9 +51,9 @@ export class SolarmanController {
   }
 
   // POST /solarman/growatt/sync — Sincroniza plantas Growatt → cria usinas no banco
-  // Body: { clientId: string, supplierId?: string }
+  // Body: { clientId?: string, supplierId?: string }
   @Post('growatt/sync')
-  async syncGrowattPlants(@Body() body: { clientId: string; supplierId?: string }) {
+  async syncGrowattPlants(@Body() body: { clientId?: string; supplierId?: string }) {
     return this.solarmanService.syncGrowattPlants(body.clientId, body.supplierId);
   }
 
