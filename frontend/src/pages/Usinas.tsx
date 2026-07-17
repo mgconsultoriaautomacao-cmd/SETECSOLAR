@@ -35,6 +35,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RouterIcon from '@mui/icons-material/Router';
 import WifiTetheringIcon from '@mui/icons-material/WifiTethering';
+import SyncIcon from '@mui/icons-material/Sync';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import { useApp, type Usina } from '../context/AppContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -89,6 +91,66 @@ export default function Usinas() {
     password: '',
   });
 
+  // ─── Estado da Sincronização Growatt ───
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncPreview, setSyncPreview] = useState<any>(null);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncClientId, setSyncClientId] = useState('');
+  const [syncSupplierId, setSyncSupplierId] = useState('');
+  const [syncStep, setSyncStep] = useState<'config' | 'preview' | 'result'>('config');
+
+  const handleOpenSyncModal = () => {
+    setSyncModalOpen(true);
+    setSyncStep('config');
+    setSyncPreview(null);
+    setSyncResult(null);
+    setSyncClientId(clients[0]?.id || '');
+    // Tenta encontrar fornecedor Growatt
+    const growattSupplier = suppliers.find(s => s.type === 'GROWATT_CLOUD');
+    setSyncSupplierId(growattSupplier?.id || '');
+  };
+
+  const handleSyncPreview = async () => {
+    setSyncLoading(true);
+    setSyncPreview(null);
+    try {
+      const url = syncSupplierId
+        ? `${API_URL}/solarman/growatt/plants?supplierId=${syncSupplierId}`
+        : `${API_URL}/solarman/growatt/plants`;
+      const r = await fetch(url, { headers: getHeaders() });
+      const data = await r.json();
+      setSyncPreview(data);
+      setSyncStep('preview');
+    } catch (err: any) {
+      setSyncPreview({ error: true, message: err.message || 'Erro ao conectar na API Growatt.' });
+      setSyncStep('preview');
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
+  const handleSyncConfirm = async () => {
+    if (!syncClientId) return;
+    setSyncLoading(true);
+    setSyncResult(null);
+    try {
+      const r = await fetch(`${API_URL}/solarman/growatt/sync`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ clientId: syncClientId, supplierId: syncSupplierId || undefined }),
+      });
+      const data = await r.json();
+      setSyncResult(data);
+      setSyncStep('result');
+    } catch (err: any) {
+      setSyncResult({ errors: [err.message || 'Erro ao sincronizar.'], created: 0, skipped: 0, updated: 0, details: [] });
+      setSyncStep('result');
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
   const handleOpenAddSupplier = () => {
     setEditingSupplier(null);
     setSupplierForm({
@@ -114,7 +176,7 @@ export default function Usinas() {
       };
     } else if (type === 'GROWATT_CLOUD') {
       extraFields = {
-        token: '82774gx5t68b8zdei81ux6ov3t5rd4k1',
+        token: '3b4eyuhm081vo6301x18e66l05b9kcjh',
         appId: '',
         appSecret: '',
         username: '',
@@ -346,14 +408,30 @@ export default function Usinas() {
         <Typography variant="h5" className="font-bold text-slate-100">
           Gestão de Usinas
         </Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleOpen}
-        >
-          Nova Usina
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1.5 }}>
+          <Button
+            variant="outlined"
+            startIcon={syncLoading ? <CircularProgress size={16} /> : <CloudDownloadIcon />}
+            onClick={handleOpenSyncModal}
+            disabled={syncLoading}
+            sx={{
+              borderColor: '#f97316',
+              color: '#f97316',
+              fontWeight: 700,
+              '&:hover': { borderColor: '#ea580c', bgcolor: '#f9731610' },
+            }}
+          >
+            Sincronizar Growatt
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleOpen}
+          >
+            Nova Usina
+          </Button>
+        </Box>
       </Box>
 
       {/* Busca e filtros */}
@@ -1050,6 +1128,220 @@ export default function Usinas() {
           <Button onClick={() => setOpenSupplierManager(false)} variant="contained" color="primary">
             Concluir
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ── Modal de Sincronização Growatt ─────────────────────────────────── */}
+      <Dialog
+        open={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
+        slotProps={{ paper: { sx: { bgcolor: '#0f172a', color: '#f8fafc', border: '1px solid #1e293b', maxWidth: 600, width: '100%' } } }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
+          <SyncIcon sx={{ color: '#f97316' }} />
+          Sincronizar Usinas — Growatt Cloud
+        </DialogTitle>
+
+        <DialogContent sx={{ pt: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mt: 1 }}>
+
+            {syncStep === 'config' && (
+              <>
+                <Alert severity="info" sx={{ bgcolor: '#1e3a5f', color: '#93c5fd', border: '1px solid #1d4ed8' }}>
+                  <strong>Importação automática de usinas</strong><br />
+                  Este recurso busca todas as plantas e dispositivos cadastrados na sua conta Growatt OSS e cria as usinas automaticamente no sistema.
+                </Alert>
+
+                <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#1e293b' } }}>
+                  <InputLabel id="sync-client-label" shrink>Cliente para vincular as usinas</InputLabel>
+                  <Select
+                    labelId="sync-client-label"
+                    value={syncClientId}
+                    label="Cliente para vincular as usinas"
+                    notched
+                    onChange={e => setSyncClientId(e.target.value)}
+                  >
+                    {clients.map(c => (
+                      <MenuItem key={c.id} value={c.id}>{c.name}</MenuItem>
+                    ))}
+                    {clients.length === 0 && (
+                      <MenuItem value="" disabled>Nenhum cliente cadastrado</MenuItem>
+                    )}
+                  </Select>
+                </FormControl>
+
+                <FormControl fullWidth sx={{ '& .MuiOutlinedInput-root': { bgcolor: '#1e293b' } }}>
+                  <InputLabel id="sync-supplier-label" shrink>Conta Growatt (Fornecedor)</InputLabel>
+                  <Select
+                    labelId="sync-supplier-label"
+                    value={syncSupplierId}
+                    label="Conta Growatt (Fornecedor)"
+                    notched
+                    displayEmpty
+                    onChange={e => setSyncSupplierId(e.target.value)}
+                  >
+                    <MenuItem value=""><em>Usar token do .env (padrão)</em></MenuItem>
+                    {suppliers.filter(s => s.type === 'GROWATT_CLOUD').map(s => (
+                      <MenuItem key={s.id} value={s.id}>{s.name}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </>
+            )}
+
+            {syncStep === 'preview' && syncPreview && (
+              <>
+                {syncPreview.error ? (
+                  <Alert severity="error" sx={{ bgcolor: '#450a0a', color: '#fca5a5', border: '1px solid #b91c1c' }}>
+                    {syncPreview.message || 'Erro ao buscar plantas da Growatt.'}
+                  </Alert>
+                ) : (
+                  <>
+                    <Alert severity="success" sx={{ bgcolor: '#14532d', color: '#86efac', border: '1px solid #15803d' }}>
+                      <strong>{syncPreview.totalPlants} planta(s)</strong> e <strong>{syncPreview.totalDevices} dispositivo(s)</strong> encontrados na conta Growatt.
+                    </Alert>
+
+                    {syncPreview.plants?.length > 0 && (
+                      <TableContainer component={Paper} className="bg-slate-950 border border-slate-800" sx={{ maxHeight: 250 }}>
+                        <Table size="small" stickyHeader>
+                          <TableHead>
+                            <TableRow>
+                              <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>Planta</TableCell>
+                              <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>kWp</TableCell>
+                              <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>Dispositivos</TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {syncPreview.plants.map((p: any, i: number) => (
+                              <TableRow key={i}>
+                                <TableCell sx={{ color: '#fff', bgcolor: 'transparent' }}>{p.name || `Planta ${p.plantId}`}</TableCell>
+                                <TableCell sx={{ color: '#94a3b8', bgcolor: 'transparent' }}>{p.peakPower} kWp</TableCell>
+                                <TableCell sx={{ color: '#94a3b8', bgcolor: 'transparent' }}>
+                                  {syncPreview.devices?.filter((d: any) => d.plantId === p.plantId).length || 0}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    )}
+
+                    <Alert severity="warning" sx={{ bgcolor: '#451a03', color: '#fcd34d', border: '1px solid #92400e' }}>
+                      As usinas serão vinculadas ao cliente: <strong>{clients.find(c => c.id === syncClientId)?.name || 'N/A'}</strong>.
+                      Usinas já existentes serão ignoradas (sem duplicatas).
+                    </Alert>
+                  </>
+                )}
+              </>
+            )}
+
+            {syncStep === 'result' && syncResult && (
+              <>
+                <Alert
+                  severity={syncResult.errors?.length > 0 && syncResult.created === 0 ? 'error' : 'success'}
+                  sx={{
+                    bgcolor: syncResult.errors?.length > 0 && syncResult.created === 0 ? '#450a0a' : '#14532d',
+                    color: syncResult.errors?.length > 0 && syncResult.created === 0 ? '#fca5a5' : '#86efac',
+                    border: `1px solid ${syncResult.errors?.length > 0 && syncResult.created === 0 ? '#b91c1c' : '#15803d'}`,
+                  }}
+                >
+                  <strong>Resultado da Sincronização:</strong><br />
+                  ✅ Criadas: {syncResult.created} &nbsp;|&nbsp;
+                  🔄 Atualizadas: {syncResult.updated} &nbsp;|&nbsp;
+                  ⏩ Ignoradas: {syncResult.skipped}
+                </Alert>
+
+                {syncResult.details?.length > 0 && (
+                  <TableContainer component={Paper} className="bg-slate-950 border border-slate-800" sx={{ maxHeight: 200 }}>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>Usina</TableCell>
+                          <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>Device SN</TableCell>
+                          <TableCell sx={{ bgcolor: '#020617', color: '#94a3b8' }}>Ação</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {syncResult.details.map((d: any, i: number) => (
+                          <TableRow key={i}>
+                            <TableCell sx={{ color: '#fff', bgcolor: 'transparent' }}>{d.name}</TableCell>
+                            <TableCell sx={{ color: '#94a3b8', bgcolor: 'transparent' }}>{d.deviceSn}</TableCell>
+                            <TableCell sx={{ bgcolor: 'transparent' }}>
+                              <Chip
+                                label={d.action}
+                                size="small"
+                                sx={{
+                                  bgcolor: d.action.includes('Criada') ? '#166534' : d.action.includes('Atualizada') ? '#1e3a5f' : '#1e293b',
+                                  color: d.action.includes('Criada') ? '#86efac' : d.action.includes('Atualizada') ? '#93c5fd' : '#94a3b8',
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+
+                {syncResult.errors?.length > 0 && (
+                  <Alert severity="error" sx={{ bgcolor: '#450a0a', color: '#fca5a5', border: '1px solid #b91c1c' }}>
+                    {syncResult.errors.map((e: string, i: number) => (
+                      <div key={i}>⚠️ {e}</div>
+                    ))}
+                  </Alert>
+                )}
+              </>
+            )}
+          </Box>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 2, borderTop: '1px solid #1e293b', gap: 1 }}>
+          <Button onClick={() => setSyncModalOpen(false)} sx={{ color: '#64748b' }}>
+            {syncStep === 'result' ? 'Fechar' : 'Cancelar'}
+          </Button>
+
+          {syncStep === 'config' && (
+            <Button
+              variant="contained"
+              onClick={handleSyncPreview}
+              disabled={syncLoading || !syncClientId}
+              startIcon={syncLoading ? <CircularProgress size={16} color="inherit" /> : <SearchIcon />}
+              sx={{ bgcolor: '#f97316', '&:hover': { bgcolor: '#ea580c' }, fontWeight: 700 }}
+            >
+              Buscar Plantas
+            </Button>
+          )}
+
+          {syncStep === 'preview' && !syncPreview?.error && (
+            <>
+              <Button
+                variant="outlined"
+                onClick={() => setSyncStep('config')}
+                sx={{ borderColor: '#64748b', color: '#94a3b8' }}
+              >
+                Voltar
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleSyncConfirm}
+                disabled={syncLoading || !syncClientId}
+                startIcon={syncLoading ? <CircularProgress size={16} color="inherit" /> : <SyncIcon />}
+                sx={{ bgcolor: '#16a34a', '&:hover': { bgcolor: '#15803d' }, fontWeight: 700 }}
+              >
+                Confirmar Sincronização
+              </Button>
+            </>
+          )}
+
+          {syncStep === 'preview' && syncPreview?.error && (
+            <Button
+              variant="outlined"
+              onClick={() => setSyncStep('config')}
+              sx={{ borderColor: '#64748b', color: '#94a3b8' }}
+            >
+              Voltar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Box>

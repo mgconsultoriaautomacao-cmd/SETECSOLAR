@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import axios from 'axios';
 import * as crypto from 'crypto';
-import { GrowattService } from './growatt.service';
+import { GrowattService, GrowattDiscoveryResult } from './growatt.service';
 import { SolplanetService } from './solplanet.service';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -937,6 +937,222 @@ export class SolarmanService implements OnModuleInit {
       this.logger.error('Erro ao salvar datalogger:', e);
       return { success: false, message: 'Erro ao salvar configuração no banco de dados.' };
     }
+  }
+
+  // ─── Growatt: Descoberta de plantas (preview) ──────────────────────────────
+  async discoverGrowattPlants(supplierId?: string): Promise<GrowattDiscoveryResult> {
+    let customToken: string | undefined;
+    let customBaseUrl: string | undefined;
+
+    if (supplierId) {
+      const supplier = await this.prisma.dataloggerSupplier.findUnique({
+        where: { id: supplierId },
+      });
+      if (supplier) {
+        customToken = supplier.token || undefined;
+        // Suporta base URL customizada via campo appId do fornecedor (ex: https://openapi-us.growatt.com)
+        if (supplier.appId && supplier.appId.startsWith('http')) {
+          customBaseUrl = supplier.appId;
+        }
+      }
+    }
+
+    return this.growattService.discoverAll(customToken, customBaseUrl);
+  }
+
+  // ─── Growatt: Sincronização de plantas → Usinas no banco ──────────────────
+  async syncGrowattPlants(clientId: string, supplierId?: string): Promise<{
+    created: number;
+    skipped: number;
+    updated: number;
+    errors: string[];
+    details: { name: string; deviceSn: string; action: string }[];
+  }> {
+    const result = {
+      created: 0,
+      skipped: 0,
+      updated: 0,
+      errors: [] as string[],
+      details: [] as { name: string; deviceSn: string; action: string }[],
+    };
+
+    // Verifica se o cliente existe
+    const client = await this.prisma.client.findUnique({ where: { id: clientId } });
+    if (!client) {
+      result.errors.push(`Cliente com ID "${clientId}" não encontrado.`);
+      return result;
+    }
+
+    // Descobre plantas e dispositivos
+    let discovery: GrowattDiscoveryResult;
+    try {
+      discovery = await this.discoverGrowattPlants(supplierId);
+    } catch (err: any) {
+      result.errors.push(`Erro ao descobrir plantas: ${err.message}`);
+      return result;
+    }
+
+    if (discovery.totalPlants === 0) {
+      result.errors.push('Nenhuma planta encontrada na conta Growatt. Verifique o token.');
+      return result;
+    }
+
+    this.logger.log(`🔄 Sincronizando ${discovery.totalPlants} planta(s) com ${discovery.totalDevices} dispositivo(s)...`);
+
+    // Busca todas as usinas existentes para verificar duplicatas
+    const existingUsinas = await this.prisma.usina.findMany({
+      where: { clientId },
+      select: { id: true, datalogger: true, name: true },
+    });
+
+    // Busca ou cria o fornecedor Growatt Cloud
+    let growattSupplierId = supplierId;
+    if (!growattSupplierId) {
+      // Tenta encontrar um fornecedor GROWATT_CLOUD existente
+      const existingSupplier = await this.prisma.dataloggerSupplier.findFirst({
+        where: { type: 'GROWATT_CLOUD' },
+      });
+      if (existingSupplier) {
+        growattSupplierId = existingSupplier.id;
+      } else {
+        // Cria um fornecedor automático
+        const newSupplier = await this.prisma.dataloggerSupplier.create({
+          data: {
+            name: 'Growatt Cloud (Auto)',
+            type: 'GROWATT_CLOUD',
+            token: process.env.GROWATT_API_TOKEN || '',
+          },
+        });
+        growattSupplierId = newSupplier.id;
+        this.logger.log(`✅ Fornecedor "Growatt Cloud (Auto)" criado automaticamente.`);
+      }
+    }
+
+    // Se há plantas mas nenhum dispositivo, cria usinas a partir das plantas
+    if (discovery.totalDevices === 0 && discovery.totalPlants > 0) {
+      this.logger.log(`  ℹ️ Nenhum dispositivo encontrado, criando usinas a partir das plantas...`);
+      for (const plant of discovery.plants) {
+        const plantName = plant.name || `Planta Growatt ${plant.plantId}`;
+        const dataloggerValue = `plant_${plant.plantId}`;
+
+        // Verifica se já existe
+        const existing = existingUsinas.find(u => u.datalogger === dataloggerValue);
+        if (existing) {
+          result.skipped++;
+          result.details.push({ name: plantName, deviceSn: dataloggerValue, action: 'Já existe — ignorada' });
+          continue;
+        }
+
+        try {
+          await this.prisma.usina.create({
+            data: {
+              name: plantName,
+              clientId,
+              capacityKwp: parseFloat(plant.peakPower) || 0,
+              inverterCapacity: parseFloat(plant.peakPower) || 0,
+              moduleCount: 0,
+              manufacturer: 'Growatt',
+              model: 'Importado via API',
+              utilityCompany: '',
+              estimatedKwh: 0,
+              paybackYears: 0,
+              installationDate: plant.createDate ? new Date(plant.createDate) : new Date(),
+              status: 'ONLINE',
+              datalogger: dataloggerValue,
+              city: plant.city || '',
+              state: '',
+              address: '',
+              dataloggerSupplierId: growattSupplierId,
+            },
+          });
+          result.created++;
+          result.details.push({ name: plantName, deviceSn: dataloggerValue, action: 'Criada' });
+          this.logger.log(`  ✅ Usina criada: "${plantName}" (planta ${plant.plantId})`);
+        } catch (err: any) {
+          result.errors.push(`Erro ao criar usina "${plantName}": ${err.message}`);
+        }
+      }
+    }
+
+    // Cria usinas a partir dos dispositivos
+    for (const device of discovery.devices) {
+      const deviceSn = device.deviceSn;
+      if (!deviceSn) {
+        result.errors.push(`Dispositivo sem serial number na planta ${device.plantId} — ignorado.`);
+        continue;
+      }
+
+      const usinaName = device.plantName
+        ? `${device.plantName} — ${deviceSn}`
+        : `Growatt ${deviceSn}`;
+
+      // Verifica se já existe uma usina com este device_sn no datalogger
+      const existing = existingUsinas.find(u => 
+        u.datalogger === deviceSn || 
+        u.datalogger.includes(deviceSn) ||
+        u.name === usinaName
+      );
+
+      if (existing) {
+        // Atualiza o fornecedor se necessário
+        try {
+          await this.prisma.usina.update({
+            where: { id: existing.id },
+            data: {
+              datalogger: deviceSn,
+              dataloggerSupplierId: growattSupplierId,
+            },
+          });
+          result.updated++;
+          result.details.push({ name: existing.name, deviceSn, action: 'Atualizada (fornecedor vinculado)' });
+        } catch (e) {
+          result.skipped++;
+          result.details.push({ name: existing.name, deviceSn, action: 'Já existe — ignorada' });
+        }
+        continue;
+      }
+
+      // Busca info da planta correspondente
+      const plant = discovery.plants.find(p => p.plantId === device.plantId);
+
+      try {
+        await this.prisma.usina.create({
+          data: {
+            name: usinaName,
+            clientId,
+            capacityKwp: plant ? parseFloat(plant.peakPower) || 0 : 0,
+            inverterCapacity: plant ? parseFloat(plant.peakPower) || 0 : 0,
+            moduleCount: 0,
+            manufacturer: 'Growatt',
+            model: device.model || 'Importado via API',
+            utilityCompany: '',
+            estimatedKwh: 0,
+            paybackYears: 0,
+            installationDate: plant?.createDate ? new Date(plant.createDate) : new Date(),
+            status: device.status === 1 ? 'ONLINE' : 'OFFLINE',
+            datalogger: deviceSn,
+            city: plant?.city || '',
+            state: '',
+            address: '',
+            dataloggerSupplierId: growattSupplierId,
+          },
+        });
+        result.created++;
+        result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
+        this.logger.log(`  ✅ Usina criada: "${usinaName}" (SN: ${deviceSn})`);
+      } catch (err: any) {
+        result.errors.push(`Erro ao criar usina "${usinaName}": ${err.message}`);
+      }
+    }
+
+    this.logger.log(`📊 Sincronização concluída: ${result.created} criadas, ${result.updated} atualizadas, ${result.skipped} ignoradas.`);
+
+    // Dispara polling imediato para atualizar as leituras
+    if (result.created > 0 || result.updated > 0) {
+      setTimeout(() => this.pollAll(), 3000);
+    }
+
+    return result;
   }
 }
 
