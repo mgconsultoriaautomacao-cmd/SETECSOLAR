@@ -94,10 +94,7 @@ export default function Usinas() {
   // ─── Estado da Sincronização Growatt ───
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
-  const [syncPreview, setSyncPreview] = useState<any>(null);
   const [syncResult, setSyncResult] = useState<any>(null);
-  const [syncClientId, setSyncClientId] = useState('');
-  const [syncSupplierId, setSyncSupplierId] = useState('');
   const [syncStep, setSyncStep] = useState<'config' | 'preview' | 'result'>('config');
 
   const handleDirectSync = async () => {
