@@ -28,10 +28,12 @@
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/package.json"
+      "dest": "/index.html"
     }
   ]
 }
+
+
 
 
 
