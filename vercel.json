@@ -22,19 +22,20 @@
     {
       "src": "/assets/(.*)",
       "headers": { "cache-control": "public, max-age=31536000, immutable" },
-      "dest": "frontend/assets/$1"
+      "dest": "frontend/dist/assets/$1"
     },
     {
       "src": "/logosetec.jpg",
-      "dest": "frontend/logosetec.jpg"
+      "dest": "frontend/dist/logosetec.jpg"
     },
     {
       "src": "/favicon.svg",
-      "dest": "frontend/favicon.svg"
+      "dest": "frontend/dist/favicon.svg"
     },
     {
       "src": "/(.*)",
-      "dest": "frontend/index.html"
+      "dest": "frontend/dist/index.html"
     }
   ]
 }
+
