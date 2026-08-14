@@ -30,8 +30,8 @@ export interface Usina {
   estimatedKwh: number;
   payback: number; // maps to paybackYears in backend
   status: 'ONLINE' | 'ALERT' | 'OFFLINE' | 'CRITICAL';
-  gpsLatitude?: number;
-  gpsLongitude?: number;
+  gpsLatitude?: number | null;
+  gpsLongitude?: number | null;
   datalogger?: string;
   address?: string;
   city?: string;
@@ -235,26 +235,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addUsina = async (usinaData: Omit<Usina, 'id' | 'status'>) => {
-    let lat = -23.5505;
-    let lon = -46.6333;
+  const addUsina = async (usinaData: Omit<Usina, 'id' | 'status'> & { gpsLatitude?: number | null; gpsLongitude?: number | null }) => {
+    let lat = usinaData.gpsLatitude;
+    let lon = usinaData.gpsLongitude;
 
-    if (usinaData.city && usinaData.state) {
-      const coords = await getCoordinates(usinaData.city, usinaData.state, usinaData.address);
-      lat = coords.lat;
-      lon = coords.lon;
-    } else {
-      const clientObj = clients.find(c => c.id === usinaData.clientId);
-      if (clientObj) {
-        lat = clientObj.gpsLatitude || -23.5505;
-        lon = clientObj.gpsLongitude || -46.6333;
+    // Se o usuário NÃO informou coordenadas geográficas manualmente, tenta geocodificar por endereço/cidade
+    if (lat === undefined || lat === null || lon === undefined || lon === null) {
+      if (usinaData.city && usinaData.state) {
+        const coords = await getCoordinates(usinaData.city, usinaData.state, usinaData.address);
+        lat = coords.lat;
+        lon = coords.lon;
+      } else {
+        const clientObj = clients.find(c => c.id === usinaData.clientId);
+        if (clientObj && clientObj.gpsLatitude && clientObj.gpsLongitude) {
+          lat = clientObj.gpsLatitude;
+          lon = clientObj.gpsLongitude;
+        } else {
+          lat = -23.5505;
+          lon = -46.6333;
+        }
       }
-    }
 
-    // Evita sobreposição exata de pinos no mapa se as coordenadas forem iguais
-    if (usinas.some(u => Math.abs((u.gpsLatitude || 0) - lat) < 0.0001 && Math.abs((u.gpsLongitude || 0) - lon) < 0.0001)) {
-      lat += (Math.random() - 0.5) * 0.015;
-      lon += (Math.random() - 0.5) * 0.015;
+      // Evita sobreposição exata de pinos se caiu no fallback aproximado
+      if (usinas.some(u => Math.abs((u.gpsLatitude || 0) - lat!) < 0.0001 && Math.abs((u.gpsLongitude || 0) - lon!) < 0.0001)) {
+        lat += (Math.random() - 0.5) * 0.015;
+        lon += (Math.random() - 0.5) * 0.015;
+      }
     }
 
     try {
@@ -283,7 +289,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let lat = usinaData.gpsLatitude;
     let lon = usinaData.gpsLongitude;
 
-    if (usinaData.city && usinaData.state && (usinaData.address || usinaData.city)) {
+    // Apenas tenta geocodificar se lat/lon não foram especificados ou passados no objeto usinaData
+    if ((lat === undefined || lat === null || lon === undefined || lon === null) && usinaData.city && usinaData.state) {
       const coords = await getCoordinates(usinaData.city, usinaData.state, usinaData.address);
       lat = coords.lat;
       lon = coords.lon;

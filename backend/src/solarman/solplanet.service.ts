@@ -14,14 +14,16 @@ export interface SolplanetReading {
 export class SolplanetService {
   private readonly logger = new Logger(SolplanetService.name);
 
-  // Host EU (Europa/Internacional) - conforme documentação oficial (github.com/PatMan6889/AISWEI-Solplanet-Cloud-API)
-  private readonly baseUrl = 'https://eu-api-genergal.aisweicloud.com';
+  // Endpoints da API Cloud (Europa/Internacional + Global)
+  private readonly baseUrls = [
+    'https://eu-api-genergal.aisweicloud.com',
+    'https://api.general.aisweicloud.com',
+    'https://api-genergal.aisweicloud.com',
+  ];
 
   /**
    * Gera a assinatura HMAC-SHA256 para autenticação na API Aiswei/Solplanet.
    * Baseado na implementação oficial: github.com/PatMan6889/AISWEI-Solplanet-Cloud-API
-   *
-   * String to sign: "{METHOD}\n{Accept}\n\n{Content-Type}\n\nX-Ca-Key:{appKey}\n{path}?{sorted_params}"
    */
   private generateSignature(
     endpoint: string, // path + query string já montada e ordenada
@@ -92,17 +94,26 @@ export class SolplanetService {
   ): Promise<any> {
     const endpoint = this.buildEndpoint(path, baseParams, apiKey, token, inverterSn);
     const headers = this.generateSignature(endpoint, appKey, appSecret);
-    const url = `${this.baseUrl}${endpoint}`;
 
-    this.logger.debug(`Solplanet request: ${url}`);
-
-    const response = await axios.get(url, {
-      headers,
-      timeout: 15000,
-      httpsAgent: new https.Agent({ rejectUnauthorized: false }),
-    });
-
-    return response.data;
+    let lastError: any = null;
+    for (const host of this.baseUrls) {
+      const url = `${host}${endpoint}`;
+      try {
+        this.logger.debug(`Solplanet request: ${url}`);
+        const response = await axios.get(url, {
+          headers,
+          timeout: 10000,
+          httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        });
+        if (response.data) {
+          return response.data;
+        }
+      } catch (err: any) {
+        lastError = err;
+        this.logger.warn(`Tentativa Solplanet falhou em ${host}: ${err.message}`);
+      }
+    }
+    throw lastError || new Error('Não foi possível conectar a nenhum servidor Solplanet Cloud.');
   }
 
   /**

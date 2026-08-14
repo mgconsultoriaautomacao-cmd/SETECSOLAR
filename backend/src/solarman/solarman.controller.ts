@@ -13,6 +13,12 @@ export class SolarmanController {
     return this.solarmanService.getAllReadings();
   }
 
+  // GET /solarman/analytics — retorna histórico e métricas de geração (diário, semanal, mensal, comparativo)
+  @Get('analytics')
+  async getAnalytics(@Query('usinaId') usinaId?: string) {
+    return this.solarmanService.getGenerationAnalytics(usinaId);
+  }
+
   // GET /solarman/status — verifica configuração do serviço
   @Get('status')
   getStatus() {

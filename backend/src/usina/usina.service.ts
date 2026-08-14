@@ -43,6 +43,12 @@ export class UsinaService {
   }
 
   async create(data: any) {
+    const parseCoord = (val: any) => {
+      if (val === undefined || val === null || val === '') return null;
+      const num = Number(val);
+      return isNaN(num) ? null : num;
+    };
+
     return this.prisma.usina.create({
       data: {
         name: data.name,
@@ -58,8 +64,8 @@ export class UsinaService {
         installationDate: data.installationDate ? new Date(data.installationDate) : new Date(),
         approvalDate: data.approvalDate ? new Date(data.approvalDate) : null,
         status: data.status || 'ONLINE',
-        gpsLatitude: data.gpsLatitude !== undefined && data.gpsLatitude !== null ? Number(data.gpsLatitude) : null,
-        gpsLongitude: data.gpsLongitude !== undefined && data.gpsLongitude !== null ? Number(data.gpsLongitude) : null,
+        gpsLatitude: parseCoord(data.gpsLatitude),
+        gpsLongitude: parseCoord(data.gpsLongitude),
         datalogger: data.datalogger || '',
         address: data.address || '',
         city: data.city || '',
@@ -73,6 +79,13 @@ export class UsinaService {
   }
 
   async update(id: string, data: any) {
+    const parseCoordUpdate = (val: any) => {
+      if (val === undefined) return undefined;
+      if (val === null || val === '') return null;
+      const num = Number(val);
+      return isNaN(num) ? null : num;
+    };
+
     return this.prisma.usina.update({
       where: { id },
       data: {
@@ -89,8 +102,8 @@ export class UsinaService {
         installationDate: data.installationDate ? new Date(data.installationDate) : undefined,
         approvalDate: data.approvalDate !== undefined ? (data.approvalDate ? new Date(data.approvalDate) : null) : undefined,
         status: data.status,
-        gpsLatitude: data.gpsLatitude !== undefined && data.gpsLatitude !== null ? Number(data.gpsLatitude) : undefined,
-        gpsLongitude: data.gpsLongitude !== undefined && data.gpsLongitude !== null ? Number(data.gpsLongitude) : undefined,
+        gpsLatitude: parseCoordUpdate(data.gpsLatitude),
+        gpsLongitude: parseCoordUpdate(data.gpsLongitude),
         datalogger: data.datalogger,
         address: data.address,
         city: data.city,

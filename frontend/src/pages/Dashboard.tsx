@@ -127,16 +127,26 @@ export default function Dashboard() {
                 : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
             }
           />
-          {usinas.map(u => {
-            const lat = u.gpsLatitude ?? -14.235;
-            const lng = u.gpsLongitude ?? -51.925;
+          {usinas.map((u, idx) => {
+            const hasCoords = u.gpsLatitude !== null && u.gpsLatitude !== undefined && u.gpsLongitude !== null && u.gpsLongitude !== undefined;
+            const baseLat = hasCoords ? Number(u.gpsLatitude) : -23.5505;
+            const baseLng = hasCoords ? Number(u.gpsLongitude) : -46.6333;
+            // Aplica pequeno offset apenas se não houver coordenadas exatas para não empilhar pinos
+            const lat = hasCoords ? baseLat : baseLat + (idx % 5 - 2) * 0.04;
+            const lng = hasCoords ? baseLng : baseLng + (Math.floor(idx / 5) - 2) * 0.04;
+
             return (
               <Marker key={u.id} position={[lat, lng]} icon={createDashboardMarker(u.status)}>
                 <Popup>
-                  <strong>{u.name}</strong><br />
-                  Cliente: {u.client || 'N/A'}<br />
-                  Status: {statusLabel[u.status] || u.status}<br />
-                  {u.capacityKwp} kWp
+                  <div style={{ fontFamily: 'Inter, sans-serif', padding: '4px' }}>
+                    <strong style={{ color: '#f57c00', fontSize: '14px' }}>{u.name}</strong><br />
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>👤 {u.client || 'Cliente N/A'}</span><br />
+                    <span style={{ fontSize: '12px', color: '#64748b' }}>📍 {u.city ? `${u.city} - ${u.state}` : 'Localização não definida'}</span><br />
+                    <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: 600 }}>⚡ {u.capacityKwp} kWp instalado</span><br />
+                    <span style={{ fontSize: '11px', color: u.status === 'ONLINE' ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+                      Status: {statusLabel[u.status] || u.status}
+                    </span>
+                  </div>
                 </Popup>
               </Marker>
             );

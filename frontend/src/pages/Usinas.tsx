@@ -67,12 +67,16 @@ export default function Usinas() {
     address: '',
     city: '',
     state: '',
+    gpsLatitude: '' as number | string,
+    gpsLongitude: '' as number | string,
     minEnergyPeak: 0.5,
     maxEnergyPeak: 12.0,
     installationDate: new Date().toISOString().split('T')[0],
     approvalDate: new Date().toISOString().split('T')[0],
     dataloggerSupplierId: '',
   });
+
+  const [geocoding, setGeocoding] = useState(false);
 
   const [openDelete, setOpenDelete] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -280,6 +284,32 @@ export default function Usinas() {
     }
   };
 
+  const handleGeocodeAddress = async () => {
+    if (!usinaForm.city && !usinaForm.address) {
+      alert('Por favor, informe ao menos a Cidade e o Estado ou Endereço para buscar as coordenadas.');
+      return;
+    }
+    setGeocoding(true);
+    try {
+      const query = [usinaForm.address, usinaForm.city, usinaForm.state, 'Brasil'].filter(Boolean).join(', ');
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if (data && data.length > 0) {
+        setUsinaForm(prev => ({
+          ...prev,
+          gpsLatitude: parseFloat(parseFloat(data[0].lat).toFixed(6)),
+          gpsLongitude: parseFloat(parseFloat(data[0].lon).toFixed(6)),
+        }));
+      } else {
+        alert('Nenhuma coordenada encontrada para o endereço informado.');
+      }
+    } catch {
+      alert('Falha ao obter coordenadas do serviço de mapas.');
+    } finally {
+      setGeocoding(false);
+    }
+  };
+
   const handleOpen = () => {
     setEditingUsina(null);
     const firstClient = clients[0];
@@ -298,6 +328,8 @@ export default function Usinas() {
       address: '',
       city: '',
       state: '',
+      gpsLatitude: '',
+      gpsLongitude: '',
       minEnergyPeak: 0.5,
       maxEnergyPeak: 12.0,
       installationDate: new Date().toISOString().split('T')[0],
@@ -324,6 +356,8 @@ export default function Usinas() {
       address: usina.address || '',
       city: usina.city || '',
       state: usina.state || '',
+      gpsLatitude: usina.gpsLatitude !== null && usina.gpsLatitude !== undefined ? usina.gpsLatitude : '',
+      gpsLongitude: usina.gpsLongitude !== null && usina.gpsLongitude !== undefined ? usina.gpsLongitude : '',
       minEnergyPeak: usina.minEnergyPeak || 0,
       maxEnergyPeak: usina.maxEnergyPeak || 0,
       installationDate: usina.installationDate ? new Date(usina.installationDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
@@ -336,10 +370,15 @@ export default function Usinas() {
   const handleClose = () => setOpen(false);
 
   const handleSave = async () => {
+    const payload = {
+      ...usinaForm,
+      gpsLatitude: usinaForm.gpsLatitude !== '' ? Number(usinaForm.gpsLatitude) : null,
+      gpsLongitude: usinaForm.gpsLongitude !== '' ? Number(usinaForm.gpsLongitude) : null,
+    };
     if (editingUsina) {
-      await updateUsina(editingUsina.id, usinaForm);
+      await updateUsina(editingUsina.id, payload);
     } else {
-      await addUsina(usinaForm);
+      await addUsina(payload as any);
     }
     handleClose();
   };
@@ -600,6 +639,44 @@ export default function Usinas() {
                 slotProps={{ inputLabel: { shrink: true } }}
                 placeholder="Ex: SP"
               />
+            </Grid>
+
+            {/* Coordenadas Geográficas (GPS / Mapa) */}
+            <Grid size={{ xs: 12, sm: 5 }}>
+              <TextField
+                label="Latitude GPS"
+                type="number"
+                fullWidth
+                value={usinaForm.gpsLatitude}
+                onChange={(e) => setUsinaForm({ ...usinaForm, gpsLatitude: e.target.value })}
+                slotProps={{ inputLabel: { shrink: true } }}
+                placeholder="Ex: -23.5505"
+                helperText="Coordenada geográfica exata"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 5 }}>
+              <TextField
+                label="Longitude GPS"
+                type="number"
+                fullWidth
+                value={usinaForm.gpsLongitude}
+                onChange={(e) => setUsinaForm({ ...usinaForm, gpsLongitude: e.target.value })}
+                slotProps={{ inputLabel: { shrink: true } }}
+                placeholder="Ex: -46.6333"
+                helperText="Para localização precisa no mapa"
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 2 }} sx={{ display: 'flex', alignItems: 'center' }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                fullWidth
+                onClick={handleGeocodeAddress}
+                disabled={geocoding}
+                sx={{ height: 56, textTransform: 'none', fontWeight: 600 }}
+              >
+                {geocoding ? 'Buscando...' : '📍 Buscar GPS'}
+              </Button>
             </Grid>
 
             <Grid size={{ xs: 12, sm: 4 }}>
