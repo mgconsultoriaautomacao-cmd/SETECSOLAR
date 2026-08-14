@@ -63,4 +63,28 @@ export class SolarmanController {
     return this.solarmanService.syncGrowattPlants(body.clientId, body.supplierId);
   }
 
+  // ─── Solplanet: Descoberta e Sincronização ────────────────────────────────
+
+  // POST /solarman/solplanet/sync — Sincroniza plantas Solplanet → cria/atualiza usinas no banco
+  @Post('solplanet/sync')
+  async syncSolplanetPlants(@Body() body: { clientId?: string; supplierId?: string }) {
+    return this.solarmanService.syncSolplanetPlants(body.clientId, body.supplierId);
+  }
+
+  // ─── Solarman Cloud: Sincronização ────────────────────────────────────────
+
+  // POST /solarman/solarman/sync — Sincroniza plantas Solarman Cloud → cria/atualiza usinas no banco
+  @Post('solarman/sync')
+  async syncSolarmanPlants(@Body() body: { clientId?: string; supplierId?: string }) {
+    return this.solarmanService.syncSolarmanPlants(body.clientId, body.supplierId);
+  }
+
+  // ─── Sincronização Unificada (Todos os Fornecedores Cloud) ────────────────
+
+  // POST /solarman/sync-all — Sincroniza Growatt, Solplanet e Solarman de uma só vez
+  @Post('sync-all')
+  async syncAllCloudPlants(@Body() body: { clientId?: string }) {
+    return this.solarmanService.syncAllCloudPlants(body.clientId);
+  }
 }
+

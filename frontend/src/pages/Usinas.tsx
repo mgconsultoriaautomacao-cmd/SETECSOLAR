@@ -25,6 +25,7 @@ import {
   IconButton,
   Alert,
   CircularProgress,
+  Menu,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
@@ -37,6 +38,7 @@ import RouterIcon from '@mui/icons-material/Router';
 import WifiTetheringIcon from '@mui/icons-material/WifiTethering';
 import SyncIcon from '@mui/icons-material/Sync';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useApp, type Usina } from '../context/AppContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -95,31 +97,55 @@ export default function Usinas() {
     password: '',
   });
 
-  // ─── Estado da Sincronização Growatt ───
+  // ─── Estado da Sincronização Cloud ───
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [syncStep, setSyncStep] = useState<'config' | 'preview' | 'result'>('config');
+  const [syncMenuAnchor, setSyncMenuAnchor] = useState<null | HTMLElement>(null);
+  const [syncProvider, setSyncProvider] = useState<'ALL' | 'GROWATT' | 'SOLPLANET' | 'SOLARMAN'>('ALL');
 
-  const handleDirectSync = async () => {
+  const handleOpenSyncMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setSyncMenuAnchor(event.currentTarget);
+  };
+
+  const handleCloseSyncMenu = () => {
+    setSyncMenuAnchor(null);
+  };
+
+  const handleDirectSync = async (provider: 'ALL' | 'GROWATT' | 'SOLPLANET' | 'SOLARMAN' = 'ALL') => {
+    handleCloseSyncMenu();
+    setSyncProvider(provider);
     setSyncModalOpen(true);
     setSyncLoading(true);
     setSyncResult(null);
     setSyncStep('result');
 
-    // Tenta encontrar fornecedor Growatt
-    const growattSupplier = suppliers.find(s => s.type === 'GROWATT_CLOUD');
-    const targetSupplierId = growattSupplier?.id || undefined;
+    let endpoint = '/solarman/sync-all';
+    let supplierId: string | undefined = undefined;
+
+    if (provider === 'GROWATT') {
+      endpoint = '/solarman/growatt/sync';
+      const supp = suppliers.find(s => s.type === 'GROWATT_CLOUD');
+      supplierId = supp?.id;
+    } else if (provider === 'SOLPLANET') {
+      endpoint = '/solarman/solplanet/sync';
+      const supp = suppliers.find(s => s.type === 'SOLPLANET_CLOUD');
+      supplierId = supp?.id;
+    } else if (provider === 'SOLARMAN') {
+      endpoint = '/solarman/solarman/sync';
+      const supp = suppliers.find(s => s.type === 'SOLARMAN_CLOUD');
+      supplierId = supp?.id;
+    }
 
     try {
-      const r = await fetch(`${API_URL}/solarman/growatt/sync`, {
+      const r = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ supplierId: targetSupplierId }),
+        body: JSON.stringify({ supplierId }),
       });
       const data = await r.json();
       setSyncResult(data);
-      // Recarrega os dados do app para refletir a sincronização imediatamente na interface
       await refreshData();
     } catch (err: any) {
       setSyncResult({ errors: [err.message || 'Erro ao sincronizar.'], created: 0, skipped: 0, updated: 0, details: [] });
@@ -127,6 +153,7 @@ export default function Usinas() {
       setSyncLoading(false);
     }
   };
+
 
   const handleOpenAddSupplier = () => {
     setEditingSupplier(null);
@@ -424,7 +451,8 @@ export default function Usinas() {
           <Button
             variant="outlined"
             startIcon={syncLoading ? <CircularProgress size={16} /> : <CloudDownloadIcon />}
-            onClick={handleDirectSync}
+            endIcon={<KeyboardArrowDownIcon />}
+            onClick={handleOpenSyncMenu}
             disabled={syncLoading}
             sx={{
               borderColor: '#f97316',
@@ -433,8 +461,27 @@ export default function Usinas() {
               '&:hover': { borderColor: '#ea580c', bgcolor: '#f9731610' },
             }}
           >
-            Sincronizar Growatt
+            Sincronizar Cloud
           </Button>
+          <Menu
+            anchorEl={syncMenuAnchor}
+            open={Boolean(syncMenuAnchor)}
+            onClose={handleCloseSyncMenu}
+            slotProps={{ paper: { sx: { bgcolor: '#0f172a', color: '#f8fafc', border: '1px solid #334155' } } }}
+          >
+            <MenuItem onClick={() => handleDirectSync('ALL')} sx={{ fontWeight: 700, color: '#f97316' }}>
+              🌐 Sincronizar Tudo (Todas as Usinas Cloud)
+            </MenuItem>
+            <MenuItem onClick={() => handleDirectSync('SOLPLANET')}>
+              🟠 Sincronizar Solplanet (AISWEI)
+            </MenuItem>
+            <MenuItem onClick={() => handleDirectSync('GROWATT')}>
+              🟢 Sincronizar Growatt
+            </MenuItem>
+            <MenuItem onClick={() => handleDirectSync('SOLARMAN')}>
+              🔵 Sincronizar Solarman Cloud
+            </MenuItem>
+          </Menu>
           <Button
             variant="contained"
             color="primary"
@@ -1189,7 +1236,13 @@ export default function Usinas() {
       >
         <DialogTitle sx={{ borderBottom: '1px solid #1e293b', display: 'flex', alignItems: 'center', gap: 1 }}>
           <SyncIcon sx={{ color: '#f97316' }} />
-          Sincronizar Usinas — Growatt Cloud
+          {syncProvider === 'ALL'
+            ? 'Sincronizar Usinas — Todos os Fornecedores Cloud'
+            : syncProvider === 'SOLPLANET'
+            ? 'Sincronizar Usinas — Solplanet Cloud (AISWEI)'
+            : syncProvider === 'SOLARMAN'
+            ? 'Sincronizar Usinas — Solarman Cloud'
+            : 'Sincronizar Usinas — Growatt Cloud'}
         </DialogTitle>
 
         <DialogContent sx={{ pt: 3 }}>
@@ -1199,7 +1252,13 @@ export default function Usinas() {
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, py: 4 }}>
                 <CircularProgress color="primary" />
                 <Typography sx={{ color: '#94a3b8' }}>
-                  Buscando plantas e dispositivos na API Growatt...
+                  {syncProvider === 'ALL'
+                    ? 'Buscando plantas e dispositivos em todos os portais Cloud (Growatt, Solplanet, Solarman)...'
+                    : syncProvider === 'SOLPLANET'
+                    ? 'Buscando plantas e dispositivos na API da Solplanet (AISWEI)...'
+                    : syncProvider === 'SOLARMAN'
+                    ? 'Buscando plantas e dispositivos na API da Solarman Cloud...'
+                    : 'Buscando plantas e dispositivos na API Growatt...'}
                 </Typography>
               </Box>
             )}

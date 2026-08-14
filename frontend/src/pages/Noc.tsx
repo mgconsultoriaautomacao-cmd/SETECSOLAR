@@ -11,6 +11,7 @@ import {
   IconButton,
   Tooltip,
   LinearProgress,
+  CircularProgress,
   Alert,
   Tabs,
   Tab,
@@ -24,6 +25,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Button,
 } from '@mui/material';
 import WarningIcon from '@mui/icons-material/Warning';
 import FlashOnIcon from '@mui/icons-material/FlashOn';
@@ -34,6 +36,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import SolarPowerIcon from '@mui/icons-material/SolarPower';
 import BoltIcon from '@mui/icons-material/Bolt';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import ElectricMeterIcon from '@mui/icons-material/ElectricMeter';
 import SignalWifiOffIcon from '@mui/icons-material/SignalWifiOff';
 import RouterIcon from '@mui/icons-material/Router';
@@ -221,6 +224,21 @@ export default function Noc() {
     }
   }, [activeTab, selectedUsinaId, fetchAnalytics]);
 
+  const [syncLoading, setSyncLoading] = useState(false);
+
+  const handleSyncAllCloud = async () => {
+    setSyncLoading(true);
+    try {
+      await fetch(`${API_URL}/solarman/sync-all`, { method: 'POST', headers: getHeaders() });
+      await fetchReadings();
+      if (activeTab === 1) await fetchAnalytics();
+    } catch (err) {
+      console.error('Erro ao sincronizar usinas cloud:', err);
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
   const handleForceRefresh = async () => {
     setIsFetching(true);
     try {
@@ -405,6 +423,26 @@ export default function Noc() {
             <Tab icon={<MapIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="NOC & Mapa ao Vivo" />
             <Tab icon={<AssessmentIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Acompanhamento de Geração" />
           </Tabs>
+
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={syncLoading ? <CircularProgress size={14} color="inherit" /> : <CloudDownloadIcon sx={{ fontSize: 18 }} />}
+            onClick={handleSyncAllCloud}
+            disabled={syncLoading}
+            sx={{
+              borderColor: '#f97316',
+              color: '#f97316',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              borderRadius: 1.5,
+              textTransform: 'none',
+              px: 1.8,
+              '&:hover': { borderColor: '#ea580c', bgcolor: '#f9731610' },
+            }}
+          >
+            {syncLoading ? 'Sincronizando...' : 'Sincronizar Cloud'}
+          </Button>
 
           <Tooltip title="Forçar atualização das leituras agora">
             <span>
