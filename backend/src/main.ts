@@ -12,16 +12,36 @@ async function bootstrap() {
   console.log(`Backend running on http://localhost:${port}`);
 }
 
-// Handler para o Vercel Serverless
-export default async (req: any, res: any) => {
+async function getApp() {
   if (!app) {
-    app = await NestFactory.create(AppModule);
-    app.enableCors();
+    app = await NestFactory.create(AppModule, { cors: true });
     app.setGlobalPrefix('api');
     await app.init();
   }
-  const server = app.getHttpAdapter().getInstance();
-  return server(req, res);
+  return app;
+}
+
+// Handler para o Vercel Serverless
+export default async (req: any, res: any) => {
+  try {
+    const instance = await getApp();
+    const server = instance.getHttpAdapter().getInstance();
+
+    if (req.url && !req.url.startsWith('/api')) {
+      req.url = '/api' + req.url;
+    }
+
+    return server(req, res);
+  } catch (err: any) {
+    console.error('Error in Vercel Serverless Function:', err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        statusCode: 500,
+        message: 'Internal Server Error',
+        error: err.message || String(err),
+      });
+    }
+  }
 };
 
 // Inicia localmente se não estiver no Vercel
