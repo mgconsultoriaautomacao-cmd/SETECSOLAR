@@ -1,37 +1,19 @@
 {
-  "version": 2,
-  "name": "setecsolar",
-  "builds": [
+  "buildCommand": "npm run build",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
     {
-      "src": "backend/src/main.ts",
-      "use": "@vercel/node"
+      "source": "/api/(.*)",
+      "destination": "/api"
     },
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "backend/src/main.ts"
-    },
-    {
-      "src": "/api",
-      "dest": "backend/src/main.ts"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/((?!api|assets|favicon.svg|logosetec.jpg).*)",
+      "destination": "/index.html"
     }
   ]
 }
+
+
 
 
 

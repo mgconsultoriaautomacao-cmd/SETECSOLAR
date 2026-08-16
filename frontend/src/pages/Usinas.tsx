@@ -41,7 +41,11 @@ import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useApp, type Usina } from '../context/AppContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3001/api'
+    : '/api');
 const getHeaders = () => ({
   'Content-Type': 'application/json',
   'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',

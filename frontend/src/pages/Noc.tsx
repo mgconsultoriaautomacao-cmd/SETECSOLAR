@@ -65,7 +65,11 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useApp } from '../context/AppContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3001/api'
+    : '/api');
 
 interface DeviceReading {
   usinaId: string;

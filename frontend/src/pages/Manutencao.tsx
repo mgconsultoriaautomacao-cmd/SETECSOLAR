@@ -20,7 +20,11 @@ import MapIcon from '@mui/icons-material/Map';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { useApp } from '../context/AppContext';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:3001/api'
+    : '/api');
 
 interface WorkOrderPart {
   id: string;
