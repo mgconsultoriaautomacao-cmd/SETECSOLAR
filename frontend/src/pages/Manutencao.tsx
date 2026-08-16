@@ -60,7 +60,7 @@ interface WorkOrder {
 const getHeaders = () => ({
   'Content-Type': 'application/json',
   'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-  'x-user-email': localStorage.getItem('user_email') || '',
+  'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
 });
 
 const statusConfig = {

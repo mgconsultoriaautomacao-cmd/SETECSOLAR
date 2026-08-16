@@ -436,10 +436,12 @@ export class SolarmanService implements OnModuleInit {
     this.logger.log('📡 Serviço de monitoramento direto inicializado.');
     this.logger.log('   Protocolo: SolarmanV5/ModbusRTU via TCP porta 8899');
     this.logger.log('   Formato do campo datalogger: "IP:SN" (ex: 177.83.14.55:2375000001)');
-    // Primeira leitura após 5 seg
-    setTimeout(() => this.pollAll(), 5000);
-    // Polling a cada 5 minutos
-    setInterval(() => this.pollAll(), 5 * 60 * 1000);
+    if (!process.env.VERCEL) {
+      // Primeira leitura após 5 seg
+      setTimeout(() => this.pollAll(), 5000);
+      // Polling a cada 5 minutos
+      setInterval(() => this.pollAll(), 5 * 60 * 1000);
+    }
   }
 
   // ─── Polling de todas as usinas com datalogger configurado ─────────────────
