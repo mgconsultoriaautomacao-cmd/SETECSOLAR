@@ -1706,5 +1706,103 @@ export class SolarmanService implements OnModuleInit {
       monthlyHistory,
     };
   }
+
+  // ─── Status de todas as APIs de fornecedores ───────────────────────────────
+  async getApiStatus(): Promise<any[]> {
+    const suppliers = await this.prisma.dataloggerSupplier.findMany();
+    const results: any[] = [];
+
+    for (const supplier of suppliers) {
+      const item: any = {
+        id: supplier.id,
+        name: supplier.name,
+        type: supplier.type,
+        status: 'UNKNOWN',
+        message: '',
+        checkedAt: new Date(),
+      };
+
+      try {
+        // ─── Growatt Cloud ───────────────────────────────────────────────
+        if (supplier.type === 'GROWATT_CLOUD') {
+          const token = supplier.token || process.env.GROWATT_API_TOKEN || '';
+          if (!token) {
+            item.status = 'NOT_CONFIGURED';
+            item.message = 'Token Growatt não configurado. Cadastre o token no fornecedor ou no .env (GROWATT_API_TOKEN).';
+          } else {
+            const resp = await axios.get('https://openapi.growatt.com/v1/plant/list', {
+              headers: { token, 'Content-Type': 'application/x-www-form-urlencoded' },
+              params: { page: 1, perpage: 1 },
+              timeout: 10000,
+            }).catch(e => e.response ? e : null);
+
+            const code = resp?.data?.error_code ?? resp?.data?.code;
+            if (resp?.status === 200 && (code === 0 || code === '0')) {
+              item.status = 'OK';
+              item.message = 'Conectado com sucesso.';
+            } else if (code === 10011 || code === '10011') {
+              item.status = 'TOKEN_EXPIRED';
+              item.message = 'Token expirado ou inválido (code: 10011). Gere um novo token em https://openapi.growatt.com → My Account → API Token.';
+            } else {
+              item.status = 'ERROR';
+              item.message = `Resposta inesperada: code=${code}, msg=${resp?.data?.error_msg ?? resp?.data?.msg ?? ''}`;
+            }
+          }
+        }
+
+        // ─── Solplanet Cloud ────────────────────────────────────────────
+        else if (supplier.type === 'SOLPLANET_CLOUD' || supplier.type === 'AISWEI_CLOUD') {
+          const appKey    = supplier.appId     || '';
+          const appSecret = supplier.appSecret || '';
+          const token     = supplier.token     || '';
+
+          if (!appKey || !appSecret || !token) {
+            item.status = 'NOT_CONFIGURED';
+            item.message = 'Credenciais incompletas. Configure appId (APP_KEY), appSecret (APP_SECRET) e token no fornecedor.';
+          } else {
+            const plants = await this.solplanetService.listPlants(appKey, appSecret, token, supplier.apiKey || undefined);
+            if (plants.length >= 0) { // listPlants retorna [] em caso de falha, nunca null
+              item.status = 'OK';
+              item.message = `Conectado. ${plants.length} planta(s) encontrada(s).`;
+            } else {
+              item.status = 'ERROR';
+              item.message = 'Nenhuma resposta válida da API Solplanet.';
+            }
+          }
+        }
+
+        // ─── Solarman Cloud ─────────────────────────────────────────────
+        else if (supplier.type === 'SOLARMAN_CLOUD') {
+          const hasCredentials = !!(supplier.appId && supplier.appSecret && supplier.username && supplier.password);
+          if (!hasCredentials) {
+            item.status = 'NOT_CONFIGURED';
+            item.message = 'Credenciais não configuradas. Preencha appId, appSecret, username e password no fornecedor.';
+          } else {
+            const token = await this.getCloudToken(supplier);
+            if (token) {
+              item.status = 'OK';
+              item.message = 'Autenticação Solarman OK. Token obtido com sucesso.';
+            } else {
+              item.status = 'AUTH_FAILED';
+              item.message = 'Falha ao autenticar na API Solarman. Verifique as credenciais.';
+            }
+          }
+        }
+
+        // ─── WiFi Stick / Local ─────────────────────────────────────────
+        else {
+          item.status = 'LOCAL';
+          item.message = 'Fornecedor local (WiFi Stick/ModbusRTU). Conexão verificada por usina individualmente.';
+        }
+      } catch (err: any) {
+        item.status = 'ERROR';
+        item.message = err.message || 'Erro desconhecido ao testar API.';
+      }
+
+      results.push(item);
+    }
+
+    return results;
+  }
 }
 

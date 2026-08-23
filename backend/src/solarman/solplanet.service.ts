@@ -14,11 +14,13 @@ export interface SolplanetReading {
 export class SolplanetService {
   private readonly logger = new Logger(SolplanetService.name);
 
-  // Endpoints da API Cloud (Europa/Internacional + Global)
+  // Endpoints da API Cloud Aiswei/Solplanet (ordenados por prioridade)
+  // NOTA: 'pro-cloud.solplanet.net' foi removido — retorna HTTP 444 (bloqueado)
   private readonly baseUrls = [
     'https://eu-api-genergal.aisweicloud.com',
     'https://api.general.aisweicloud.com',
     'https://api-genergal.aisweicloud.com',
+    'https://api-us.aisweicloud.com',
   ];
 
   /**

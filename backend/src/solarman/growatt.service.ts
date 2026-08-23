@@ -91,6 +91,18 @@ export class GrowattService {
           gpsLongitude: p.longitude ? parseFloat(p.longitude) : null,
         }));
       } else {
+        const errorCode = response.data?.error_code ?? response.data?.code;
+        const errorMsg  = response.data?.error_msg  ?? response.data?.msg ?? '';
+
+        // Erro 10011 = token expirado ou revogado no portal Growatt OpenAPI
+        if (errorCode === 10011 || errorCode === '10011') {
+          throw new Error(
+            `Token Growatt expirado ou inválido (code: 10011 - ${errorMsg || 'error_permission_denied'}). ` +
+            `Acesse https://openapi.growatt.com → "My Account" → "API Token" e gere um novo token. ` +
+            `Em seguida, atualize GROWATT_API_TOKEN no .env e o campo "token" do fornecedor no banco.`
+          );
+        }
+
         this.logger.warn(`Resposta inesperada de /v1/plant/list: ${JSON.stringify(response.data)}`);
         return [];
       }

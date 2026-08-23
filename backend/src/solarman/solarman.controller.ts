@@ -25,6 +25,12 @@ export class SolarmanController {
     return this.solarmanService.getConfigStatus();
   }
 
+  // GET /solarman/api-status — verifica em tempo real o status de cada fornecedor cadastrado
+  @Get('api-status')
+  async getApiStatus() {
+    return this.solarmanService.getApiStatus();
+  }
+
   // POST /solarman/refresh — força nova leitura imediata
   @Post('refresh')
   async forceRefresh() {
