@@ -27,7 +27,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   // REST Fallback Client para Vercel Serverless
   get rest() {
     const supabaseUrl = process.env.SUPABASE_URL || 'https://dpmpxuahlpxucqeonrhk.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRwbXB4dWFobHB4dWNxZW9ucmhrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExOTcxNTYsImV4cCI6MjA5Njc3MzE1Nn0.KiC0krWgbb2CDJRmQ8HPxDZD2g71ZyePtQuYQ0ZQnCY';
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
     const headers = {
       'apikey': supabaseKey,
