@@ -1709,7 +1709,12 @@ export class SolarmanService implements OnModuleInit {
 
   // ─── Status de todas as APIs de fornecedores ───────────────────────────────
   async getApiStatus(): Promise<any[]> {
-    const suppliers = await this.prisma.dataloggerSupplier.findMany();
+    let suppliers: any[] = [];
+    try {
+      suppliers = await this.prisma.dataloggerSupplier.findMany();
+    } catch (e) {
+      suppliers = await this.prisma.rest.get('DataloggerSupplier', 'select=*');
+    }
     const results: any[] = [];
 
     for (const supplier of suppliers) {
