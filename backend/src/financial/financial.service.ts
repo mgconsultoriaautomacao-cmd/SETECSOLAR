@@ -6,43 +6,53 @@ export class FinancialService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(type?: string, status?: string, search?: string) {
-    const where: any = {};
-
-    if (type) {
-      where.type = type;
-    }
-
-    if (status) {
-      where.status = status;
-    }
-
-    if (search) {
-      where.OR = [
-        { description: { contains: search, mode: 'insensitive' } },
-        { supplierOrClient: { contains: search, mode: 'insensitive' } },
-        { ticketInfo: { contains: search, mode: 'insensitive' } },
-        { observations: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    return this.prisma.financialRecord.findMany({
-      where,
-      include: {
-        client: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
+    try {
+      const where: any = {};
+      if (type) where.type = type;
+      if (status) where.status = status;
+      if (search) {
+        where.OR = [
+          { description: { contains: search, mode: 'insensitive' } },
+          { supplierOrClient: { contains: search, mode: 'insensitive' } },
+          { ticketInfo: { contains: search, mode: 'insensitive' } },
+          { observations: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+      return await this.prisma.financialRecord.findMany({
+        where,
+        include: {
+          client: {
+            select: { id: true, name: true, email: true, phone: true },
           },
         },
-      },
-      orderBy: { dueDate: 'desc' },
-    });
+        orderBy: { dueDate: 'desc' },
+      });
+    } catch (err) {
+      let query = 'select=*,client:Client(id,name,email,phone)&order=dueDate.desc';
+      if (type) query += `&type=eq.${type}`;
+      if (status) query += `&status=eq.${status}`;
+      const records = await this.prisma.rest.get('FinancialRecord', query);
+      if (search) {
+        const s = search.toLowerCase();
+        return records.filter((r: any) =>
+          (r.description && r.description.toLowerCase().includes(s)) ||
+          (r.supplierOrClient && r.supplierOrClient.toLowerCase().includes(s)) ||
+          (r.ticketInfo && r.ticketInfo.toLowerCase().includes(s)) ||
+          (r.observations && r.observations.toLowerCase().includes(s))
+        );
+      }
+      return records;
+    }
   }
 
   async getSummary() {
-    const records = await this.prisma.financialRecord.findMany();
+    let records: any[] = [];
+    try {
+      records = await this.prisma.financialRecord.findMany();
+    } catch (err) {
+      records = await this.prisma.rest.get('FinancialRecord', 'select=*');
+    }
+
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -51,7 +61,7 @@ export class FinancialService {
     let totalPendenteMes = 0;
     let totalAtrasado = 0;
     let totalPagarMes = 0;
-    let mrr = 0; // Contas a receber recorrentes do mês corrente
+    let mrr = 0;
 
     records.forEach((record) => {
       const recordDate = new Date(record.dueDate);
@@ -65,7 +75,6 @@ export class FinancialService {
             totalRecebidoMes += record.amount;
           }
         } else {
-          // Pendente ou Vencido/Atrasado
           if (recordDate < now && record.status !== 'PAGO' && record.status !== 'RECEBIDO') {
             totalAtrasado += record.amount;
           }
@@ -74,15 +83,11 @@ export class FinancialService {
           }
         }
         if (isCurrentMonth) {
-          mrr += record.amount; // Todas as receitas previstas do mês (ou recorrentes)
+          mrr += record.amount;
         }
       } else if (record.type === 'PAGAR') {
         if (isCurrentMonth) {
           totalPagarMes += record.amount;
-        }
-        if (record.status !== 'PAGO' && recordDate < now) {
-          // Contas a pagar atrasadas
-          // Podemos adicionar no total de atrasados ou lidar separadamente
         }
       }
     });
@@ -98,24 +103,28 @@ export class FinancialService {
   }
 
   async create(data: any) {
-    return this.prisma.financialRecord.create({
-      data: {
-        type: data.type,
-        description: data.description,
-        amount: Number(data.amount),
-        dueDate: new Date(data.dueDate),
-        entryDate: data.entryDate ? new Date(data.entryDate) : new Date(),
-        status: data.status || 'PENDENTE',
-        paymentDate: data.paymentDate ? new Date(data.paymentDate) : null,
-        supplierOrClient: data.supplierOrClient,
-        ticketInfo: data.ticketInfo || null,
-        observations: data.observations || null,
-        clientId: data.clientId || null,
-      },
-      include: {
-        client: true,
-      },
-    });
+    const payload = {
+      type: data.type,
+      description: data.description,
+      amount: Number(data.amount),
+      dueDate: new Date(data.dueDate),
+      entryDate: data.entryDate ? new Date(data.entryDate) : new Date(),
+      status: data.status || 'PENDENTE',
+      paymentDate: data.paymentDate ? new Date(data.paymentDate) : null,
+      supplierOrClient: data.supplierOrClient,
+      ticketInfo: data.ticketInfo || null,
+      observations: data.observations || null,
+      clientId: data.clientId || null,
+    };
+
+    try {
+      return await this.prisma.financialRecord.create({
+        data: payload,
+        include: { client: true },
+      });
+    } catch (err) {
+      return await this.prisma.rest.post('FinancialRecord', payload);
+    }
   }
 
   async update(id: string, data: any) {
@@ -134,18 +143,24 @@ export class FinancialService {
     if (data.observations !== undefined) updateData.observations = data.observations;
     if (data.clientId !== undefined) updateData.clientId = data.clientId;
 
-    return this.prisma.financialRecord.update({
-      where: { id },
-      data: updateData,
-      include: {
-        client: true,
-      },
-    });
+    try {
+      return await this.prisma.financialRecord.update({
+        where: { id },
+        data: updateData,
+        include: { client: true },
+      });
+    } catch (err) {
+      return await this.prisma.rest.patch('FinancialRecord', id, updateData);
+    }
   }
 
   async remove(id: string) {
-    return this.prisma.financialRecord.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.financialRecord.delete({
+        where: { id },
+      });
+    } catch (err) {
+      return await this.prisma.rest.delete('FinancialRecord', id);
+    }
   }
 }

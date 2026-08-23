@@ -94,37 +94,54 @@ export class GmailService {
   }
 
   async listAccounts() {
-    return this.prisma.gmailAccount.findMany({
-      orderBy: { email: 'asc' },
-    });
+    try {
+      return await this.prisma.gmailAccount.findMany({
+        orderBy: { email: 'asc' },
+      });
+    } catch (err) {
+      return await this.prisma.rest.get('GmailAccount', 'select=*&order=email.asc');
+    }
   }
 
   async addMockAccount(email: string, name?: string) {
     const defaultName = name || email.split('@')[0];
-    return this.prisma.gmailAccount.upsert({
-      where: { email },
-      update: {
-        name: defaultName,
-        refreshToken: `mock-refresh-token-${Date.now()}`,
-      },
-      create: {
-        email,
-        name: defaultName,
-        refreshToken: `mock-refresh-token-${Date.now()}`,
-      },
-    });
+    const payload = {
+      email,
+      name: defaultName,
+      refreshToken: `mock-refresh-token-${Date.now()}`,
+    };
+
+    try {
+      return await this.prisma.gmailAccount.upsert({
+        where: { email },
+        update: { name: defaultName, refreshToken: payload.refreshToken },
+        create: payload,
+      });
+    } catch (err) {
+      return await this.prisma.rest.post('GmailAccount', payload);
+    }
   }
 
   async removeAccount(id: string) {
-    return this.prisma.gmailAccount.delete({
-      where: { id },
-    });
+    try {
+      return await this.prisma.gmailAccount.delete({
+        where: { id },
+      });
+    } catch (err) {
+      return await this.prisma.rest.delete('GmailAccount', id);
+    }
   }
 
   async getEmails(email: string) {
-    const account = await this.prisma.gmailAccount.findUnique({
-      where: { email },
-    });
+    let account: any = null;
+    try {
+      account = await this.prisma.gmailAccount.findUnique({
+        where: { email },
+      });
+    } catch (err) {
+      const res = await this.prisma.rest.get('GmailAccount', `email=eq.${encodeURIComponent(email)}`);
+      account = res && res.length > 0 ? res[0] : null;
+    }
 
     if (!account) {
       throw new BadRequestException('Conta Gmail não cadastrada.');
