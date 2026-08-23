@@ -83,34 +83,49 @@ async function checkSupabase() {
   }
 }
 
-// ─── 3. GROWATT API ───────────────────────────────────────────────────────────
+// ─── 3. GROWATT API ─────────────────────────────────────────────────
 async function checkGrowatt() {
   console.log('\n══════════════════════════════════════════════');
   console.log('  3. GROWATT OpenAPI');
   console.log('══════════════════════════════════════════════');
 
-  const token = process.env.GROWATT_API_TOKEN;
+  // Busca token do banco primeiro, depois do .env
+  let token = process.env.GROWATT_API_TOKEN;
+  try {
+    const dbSupplier = await prisma.dataloggerSupplier.findFirst({ where: { type: 'GROWATT_CLOUD' } });
+    if (dbSupplier && dbSupplier.token) {
+      token = dbSupplier.token;
+      console.log(INFO('Token carregado do banco de dados.'));
+    } else {
+      console.log(INFO('Token carregado do .env.'));
+    }
+  } catch(e) { /* ignora erro ao buscar no banco */ }
+
   if (!token) {
-    console.log(WARN('GROWATT_API_TOKEN não definido no .env'));
+    console.log(WARN('GROWATT_API_TOKEN não definido no .env nem no banco'));
     return;
   }
 
   const urls = [
-    { label: 'PlantList (v1)',    url: `https://openapi.growatt.com/v1/plant/list?token=${token}` },
-    { label: 'User info (v1)',    url: `https://openapi.growatt.com/v1/user/info?token=${token}` },
+    { label: 'PlantList (v1)',  url: `https://openapi.growatt.com/v1/plant/list` },
+    { label: 'User info (v1)', url: `https://openapi.growatt.com/v1/user/info` },
   ];
 
   for (const { label, url } of urls) {
     try {
       const res = await axios.get(url, {
         timeout: 10000,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { token, 'Content-Type': 'application/x-www-form-urlencoded' },
+        params: { page: 1, perpage: 5 },
       });
       const body = res.data;
       const code = body?.error_code ?? body?.code ?? res.status;
       const msg  = body?.error_msg  ?? body?.msg  ?? '';
       if (res.status === 200 && (code === 0 || code === '0' || code === 200)) {
-        console.log(OK(`[${label}] OK — code: ${code}`));
+        const plants = body?.data?.plants?.length ?? body?.data?.datas?.length ?? 0;
+        console.log(OK(`[${label}] OK — code: ${code} | plantas: ${plants}`));
+      } else if (code === 10011 || code === '10011') {
+        console.log(FAIL(`[${label}] TOKEN EXPIRADO (code: 10011). Gere novo token em https://openapi.growatt.com`));
       } else {
         console.log(WARN(`[${label}] Resposta com code=${code} | msg: ${msg}`));
       }
@@ -125,13 +140,33 @@ async function checkGrowatt() {
 // ─── 4. SOLPLANET API ─────────────────────────────────────────────────────────
 async function checkSolplanet() {
   console.log('\n══════════════════════════════════════════════');
-  console.log('  4. SOLPLANET Pro Cloud API');
+  console.log('  4. SOLPLANET Aiswei Cloud API');
   console.log('══════════════════════════════════════════════');
 
-  const APP_KEY    = '205024856';
-  const APP_SECRET = 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
-  const TOKEN      = 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09';
-  const BASE_URL   = 'https://pro-cloud.solplanet.net';
+  // Busca credenciais do banco de dados
+  let APP_KEY, APP_SECRET, TOKEN;
+  try {
+    const dbSupplier = await prisma.dataloggerSupplier.findFirst({ where: { type: 'SOLPLANET_CLOUD' } });
+    if (dbSupplier) {
+      APP_KEY    = dbSupplier.appId     || '';
+      APP_SECRET = dbSupplier.appSecret || '';
+      TOKEN      = dbSupplier.token     || '';
+      console.log(INFO('Credenciais Solplanet carregadas do banco.'));
+    }
+  } catch(e) { /* ignora erro ao buscar */ }
+
+  if (!APP_KEY || !APP_SECRET || !TOKEN) {
+    console.log(WARN('Credenciais Solplanet (appId/appSecret/token) não configuradas no banco.'));
+    console.log(INFO('Configure o fornecedor SOLPLANET_CLOUD no banco com appId, appSecret e token.'));
+    return;
+  }
+
+  // Hosts corretos — pro-cloud.solplanet.net retorna HTTP 444 (bloqueado)
+  const HOSTS = [
+    'https://eu-api-genergal.aisweicloud.com',
+    'https://api.general.aisweicloud.com',
+    'https://api-genergal.aisweicloud.com',
+  ];
 
   function makeHeaders(endpoint) {
     const method = 'GET';
@@ -149,17 +184,14 @@ async function checkSolplanet() {
     };
   }
 
-  const endpoints = [
-    { label: 'getPlanListPro', path: '/api/pro/getPlanListPro', params: { apikey: APP_KEY, token: TOKEN } },
-    { label: 'getPlantOverviewPro', path: '/api/pro/getPlantOverviewPro', params: { apikey: APP_KEY, token: TOKEN } },
-  ];
+  const qs = Object.keys({ apikey: APP_KEY, token: TOKEN }).sort()
+    .map(k => k === 'apikey' ? `apikey=${APP_KEY}` : `token=${TOKEN}`).join('&');
+  const endpoint = `/pro/getPlanListPro?${qs}`;
+  const headers = makeHeaders(endpoint);
 
-  for (const { label, path, params } of endpoints) {
-    const qs = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&');
-    const endpoint = `${path}?${qs}`;
-    const headers = makeHeaders(endpoint);
-    const url = `${BASE_URL}${endpoint}`;
-
+  let ok = false;
+  for (const host of HOSTS) {
+    const url = `${host}${endpoint}`;
     try {
       const res = await axios.get(url, {
         headers,
@@ -167,18 +199,25 @@ async function checkSolplanet() {
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
       });
       const code = res.data?.code ?? res.data?.status ?? res.status;
-      console.log(OK(`[${label}] OK — status HTTP: ${res.status} | code: ${code}`));
+      console.log(OK(`[${host.split('//')[1]}] HTTP ${res.status} | code: ${code}`));
+      ok = true;
+      break;
     } catch (e) {
       if (e.response) {
-        const errMsg = e.response.headers['x-ca-error-message'] || '';
-        const errCode = e.response.headers['x-ca-error-code'] || '';
-        console.log(FAIL(`[${label}] ${e.response.status} | ${errCode} | ${errMsg} | ${JSON.stringify(e.response.data).substring(0, 200)}`));
+        const errMsg = e.response.headers?.['x-ca-error-message'] || '';
+        console.log(WARN(`[${host.split('//')[1]}] HTTP ${e.response.status} | ${errMsg || JSON.stringify(e.response.data).substring(0, 80)}`));
+        ok = true; // host respondeu (mesmo com erro de auth)
       } else {
-        console.log(FAIL(`[${label}] ${e.message}`));
+        console.log(INFO(`[${host.split('//')[1]}] sem resposta: ${e.message}`));
       }
     }
   }
+
+  if (!ok) {
+    console.log(FAIL('Nenhum host Solplanet/Aiswei respondeu. Verifique conectividade.'));
+  }
 }
+
 
 // ─── 5. SOLARMAN API ─────────────────────────────────────────────────────────
 async function checkSolarman() {
