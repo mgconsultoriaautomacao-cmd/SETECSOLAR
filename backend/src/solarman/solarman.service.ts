@@ -446,10 +446,15 @@ export class SolarmanService implements OnModuleInit {
 
   // ─── Polling de todas as usinas com datalogger configurado ─────────────────
   async pollAll(): Promise<void> {
-    const usinas = await this.prisma.usina.findMany({
-      where: { datalogger: { not: '' } },
-      include: { dataloggerSupplier: true },
-    });
+    let usinas: any[] = [];
+    try {
+      usinas = await this.prisma.usina.findMany({
+        where: { datalogger: { not: '' } },
+        include: { dataloggerSupplier: true },
+      });
+    } catch (e) {
+      usinas = await this.prisma.rest.get('Usina', 'select=*,dataloggerSupplier:DataloggerSupplier(*)&datalogger=neq.');
+    }
 
     if (usinas.length === 0) {
       this.logger.debug('Nenhuma usina com datalogger configurado.');
@@ -1573,10 +1578,19 @@ export class SolarmanService implements OnModuleInit {
       where.id = usinaId;
     }
 
-    const usinas = await this.prisma.usina.findMany({
-      where,
-      include: { client: true },
-    });
+    let usinas: any[] = [];
+    try {
+      usinas = await this.prisma.usina.findMany({
+        where,
+        include: { client: true },
+      });
+    } catch (e) {
+      let query = 'select=*,client:Client(*)';
+      if (usinaId && usinaId !== 'all') {
+        query += `&id=eq.${usinaId}`;
+      }
+      usinas = await this.prisma.rest.get('Usina', query);
+    }
 
     const now = new Date();
 
