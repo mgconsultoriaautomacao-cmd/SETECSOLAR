@@ -731,37 +731,50 @@ export class SolarmanService implements OnModuleInit {
 
   // ─── Getters para o controller ──────────────────────────────────────────────
   async getAllReadings(): Promise<DeviceReading[]> {
-    const usinas = await this.prisma.usina.findMany({
-      where: { datalogger: { not: '' } },
-    });
+    let usinas: any[] = [];
+    try {
+      usinas = await this.prisma.usina.findMany({
+        where: { datalogger: { not: '' } },
+      });
+    } catch (e) {
+      usinas = await this.prisma.rest.get('Usina', 'select=*');
+    }
 
-    return usinas.map(u => ({
-      usinaId: u.id,
-      usinaNome: u.name,
-      deviceSn: u.datalogger,
-      ipAddress: u.datalogger.includes(':') ? 'Modbus TCP' : 'Cloud API',
-      powerNow: u.powerNow,
-      generationToday: u.generationToday,
-      generationTotal: u.generationTotal,
-      gridVoltage: null,
-      gridFrequency: null,
-      temperature: u.temperature,
-      dcPower: null,
-      status: u.status as any,
-      lastUpdate: u.readingLastUpdate || u.updatedAt,
-    }));
+    return usinas
+      .filter(u => u && u.datalogger)
+      .map(u => ({
+        usinaId: u.id,
+        usinaNome: u.name,
+        deviceSn: u.datalogger,
+        ipAddress: (u.datalogger || '').includes(':') ? 'Modbus TCP' : 'Cloud API',
+        powerNow: u.powerNow,
+        generationToday: u.generationToday,
+        generationTotal: u.generationTotal,
+        gridVoltage: null,
+        gridFrequency: null,
+        temperature: u.temperature,
+        dcPower: null,
+        status: u.status as any,
+        lastUpdate: u.readingLastUpdate || u.updatedAt,
+      }));
   }
 
   async getReading(usinaId: string): Promise<DeviceReading | undefined> {
-    const u = await this.prisma.usina.findUnique({
-      where: { id: usinaId }
-    });
-    if (!u) return undefined;
+    let u: any = null;
+    try {
+      u = await this.prisma.usina.findUnique({
+        where: { id: usinaId }
+      });
+    } catch (e) {
+      const res = await this.prisma.rest.get('Usina', `id=eq.${usinaId}`);
+      u = res && res.length > 0 ? res[0] : null;
+    }
+    if (!u || !u.datalogger) return undefined;
     return {
       usinaId: u.id,
       usinaNome: u.name,
       deviceSn: u.datalogger,
-      ipAddress: u.datalogger.includes(':') ? 'Modbus TCP' : 'Cloud API',
+      ipAddress: (u.datalogger || '').includes(':') ? 'Modbus TCP' : 'Cloud API',
       powerNow: u.powerNow,
       generationToday: u.generationToday,
       generationTotal: u.generationTotal,
