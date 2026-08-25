@@ -1556,68 +1556,105 @@ export class SolarmanService implements OnModuleInit {
       });
     }
 
-    // Usinas de exemplo / padrão Solarman Cloud para teste e operação
-    const solarmanPlants = [
-      { name: 'Usina Solarman Central 01', sn: '2375000001', kwp: 18.0, city: 'Sorocaba - SP', lat: -23.5015, lng: -47.4526 },
-      { name: 'Usina Solarman Central 02', sn: '2375000002', kwp: 25.0, city: 'Jundiaí - SP', lat: -23.1857, lng: -46.8892 },
-    ];
+    const token = await this.getCloudToken(supplier);
+    if (!token) {
+      result.errors.push('Falha na autenticação da API Solarman Cloud. Verifique se o App ID, App Secret e a senha da conta estão corretos no portal Solarman.');
+      return result;
+    }
 
-    const existingUsinas = await this.dbGetUsinas();
+    try {
+      // 1. Busca estações / usinas reais na conta Solarman
+      const stationRes = await axios.post(
+        'https://globalapi.solarmanpv.com/station/v1.0/list',
+        { page: 1, size: 50 },
+        { headers: { Authorization: `bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 10000 }
+      );
 
-    for (const p of solarmanPlants) {
-      const existing = existingUsinas.find(u => u.datalogger === p.sn || u.name === p.name);
-      if (existing) {
-        try {
-          await this.dbUpdateUsina(existing.id, { dataloggerSupplierId: supplier?.id, status: 'ONLINE' });
-          result.updated++;
-          result.details.push({ name: p.name, deviceSn: p.sn, action: 'Atualizada (Solarman Cloud)' });
-        } catch (e) {
-          result.skipped++;
-          result.details.push({ name: p.name, deviceSn: p.sn, action: 'Já existe' });
-        }
-        continue;
-      }
+      const stationList: any[] = stationRes.data?.stationList || stationRes.data?.data?.stationList || stationRes.data?.data || [];
 
+      // 2. Busca dispositivos reais na conta Solarman
+      let deviceList: any[] = [];
       try {
-        const client = (await this.dbGetClient()) || await this.dbCreateClient({
-          name: p.name,
-          email: `solarman_${Date.now()}@local`,
-          document: '00000000000',
-          phone: '00000000000',
-          whatsapp: '00000000000',
-          zipCode: '00000000',
-          address: 'Importado Solarman',
-          city: p.city,
-          state: 'SP',
-          installationDate: new Date(),
-        });
-
-        await this.dbCreateUsina({
-          name: p.name,
-          clientId: client?.id,
-          capacityKwp: p.kwp,
-          inverterCapacity: p.kwp * 0.8,
-          moduleCount: Math.round(p.kwp * 2),
-          manufacturer: 'Solarman',
-          model: 'IGEN / Deye Hybrid',
-          utilityCompany: 'Enel',
-          estimatedKwh: p.kwp * 130,
-          paybackYears: 4.0,
-          installationDate: new Date(),
-          status: 'ONLINE',
-          datalogger: p.sn,
-          city: p.city,
-          state: 'SP',
-          address: 'Instalação Solarman Cloud',
-          dataloggerSupplierId: supplier?.id,
-          gpsLatitude: p.lat,
-          gpsLongitude: p.lng,
-        });
-        result.created++;
-        result.details.push({ name: p.name, deviceSn: p.sn, action: 'Criada' });
-      } catch (err: any) {
-        result.errors.push(`Erro ao criar usina "${p.name}": ${err.message}`);
+        const deviceRes = await axios.post(
+          'https://globalapi.solarmanpv.com/device/v1.0/list',
+          { page: 1, size: 50 },
+          { headers: { Authorization: `bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 10000 }
+        );
+        deviceList = deviceRes.data?.deviceList || deviceRes.data?.data?.deviceList || deviceRes.data?.data || [];
+      } catch (e: any) {
+        this.logger.warn(`Erro ao listar dispositivos Solarman: ${e.message}`);
       }
+
+      if (stationList.length === 0 && deviceList.length === 0) {
+        result.errors.push('Nenhuma estação ou dispositivo encontrado na conta Solarman Cloud.');
+        return result;
+      }
+
+      const existingUsinas = await this.dbGetUsinas();
+
+      for (const st of stationList) {
+        const stationName = st.name || st.stationName || `Estação Solarman ${st.id}`;
+        const stationIdStr = String(st.id || st.stationId || '');
+        const matchedDev = deviceList.find((d: any) => String(d.stationId || d.station_id) === stationIdStr);
+        const deviceSn = matchedDev?.deviceSn || matchedDev?.sn || stationIdStr;
+
+        const existing = existingUsinas.find(u => u.datalogger === deviceSn || u.name === stationName);
+        if (existing) {
+          try {
+            await this.dbUpdateUsina(existing.id, { dataloggerSupplierId: supplier?.id, status: 'ONLINE' });
+            result.updated++;
+            result.details.push({ name: stationName, deviceSn, action: 'Atualizada (Solarman Cloud)' });
+          } catch (e) {
+            result.skipped++;
+            result.details.push({ name: stationName, deviceSn, action: 'Já existe' });
+          }
+          continue;
+        }
+
+        try {
+          const client = (await this.dbGetClient(undefined, stationName)) || await this.dbCreateClient({
+            name: stationName,
+            email: `solarman_${Date.now()}@local`,
+            document: '00000000000',
+            phone: '00000000000',
+            whatsapp: '00000000000',
+            zipCode: '00000000',
+            address: st.locationAddress || 'Importado via Solarman API',
+            city: st.city || 'Importado',
+            state: 'SP',
+            installationDate: st.gridConnectionDate ? new Date(st.gridConnectionDate) : new Date(),
+          });
+
+          const capacityKwp = Number(st.capacity || st.installedCapacity || 10);
+          await this.dbCreateUsina({
+            name: stationName,
+            clientId: client?.id,
+            capacityKwp: capacityKwp,
+            inverterCapacity: capacityKwp * 0.8,
+            moduleCount: Math.round(capacityKwp * 2),
+            manufacturer: 'Solarman',
+            model: matchedDev?.deviceModel || 'Solarman Cloud Inverter',
+            utilityCompany: '',
+            estimatedKwh: capacityKwp * 130,
+            paybackYears: 4.0,
+            installationDate: st.gridConnectionDate ? new Date(st.gridConnectionDate) : new Date(),
+            status: 'ONLINE',
+            datalogger: deviceSn,
+            city: st.city || 'Importado',
+            state: 'SP',
+            address: st.locationAddress || 'Importado Solarman',
+            dataloggerSupplierId: supplier?.id,
+            gpsLatitude: st.latitude ? Number(st.latitude) : null,
+            gpsLongitude: st.longitude ? Number(st.longitude) : null,
+          });
+          result.created++;
+          result.details.push({ name: stationName, deviceSn, action: 'Criada' });
+        } catch (err: any) {
+          result.errors.push(`Erro ao criar usina "${stationName}": ${err.message}`);
+        }
+      }
+    } catch (err: any) {
+      result.errors.push(`Erro ao consultar Solarman API: ${err.response?.data?.msg || err.message}`);
     }
 
     if (result.created > 0 || result.updated > 0) {
