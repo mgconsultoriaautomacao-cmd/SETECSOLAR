@@ -144,6 +144,8 @@ export default function Noc() {
   const [selectedUsinaId, setSelectedUsinaId] = useState('all');
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [startDate, setStartDate] = useState(''); // YYYY-MM-DD
+  const [endDate, setEndDate] = useState('');     // YYYY-MM-DD
 
   const mapRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
@@ -204,7 +206,10 @@ export default function Noc() {
   const fetchAnalytics = useCallback(async () => {
     setLoadingAnalytics(true);
     try {
-      const res = await fetch(`${API_URL}/solarman/analytics?usinaId=${selectedUsinaId}`, { headers: getHeaders() });
+      let url = `${API_URL}/solarman/analytics?usinaId=${selectedUsinaId}`;
+      if (startDate) url += `&startDate=${startDate}`;
+      if (endDate)   url += `&endDate=${endDate}`;
+      const res = await fetch(url, { headers: getHeaders() });
       if (res.ok) {
         const data = await res.json();
         setAnalyticsData(data);
@@ -214,7 +219,7 @@ export default function Noc() {
     } finally {
       setLoadingAnalytics(false);
     }
-  }, [selectedUsinaId]);
+  }, [selectedUsinaId, startDate, endDate]);
 
   useEffect(() => {
     fetchReadings();
@@ -684,7 +689,99 @@ export default function Noc() {
                 ))}
               </Select>
             </FormControl>
+
+            {/* Filtro de Período por Datas */}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <CalendarMonthIcon sx={{ color: '#f57c00', fontSize: 20 }} />
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <input
+                  id="analytics-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  style={{
+                    background: '#020617',
+                    border: '1px solid #334155',
+                    color: '#f8fafc',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontSize: 13,
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                />
+                <Typography sx={{ color: '#475569', fontSize: 12 }}>até</Typography>
+                <input
+                  id="analytics-end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  style={{
+                    background: '#020617',
+                    border: '1px solid #334155',
+                    color: '#f8fafc',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontSize: 13,
+                    outline: 'none',
+                    cursor: 'pointer',
+                  }}
+                />
+              </Box>
+              {(startDate || endDate) && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  sx={{
+                    borderColor: '#334155',
+                    color: '#94a3b8',
+                    fontSize: 11,
+                    py: 0.5,
+                    px: 1,
+                    minWidth: 'unset',
+                    textTransform: 'none',
+                    '&:hover': { borderColor: '#f43f5e', color: '#f43f5e' },
+                  }}
+                >
+                  Limpar
+                </Button>
+              )}
+              <Button
+                id="btn-apply-date-filter"
+                size="small"
+                variant="contained"
+                onClick={fetchAnalytics}
+                startIcon={<ShowChartIcon sx={{ fontSize: 16 }} />}
+                sx={{
+                  bgcolor: '#f57c00',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 11,
+                  py: 0.6,
+                  px: 1.5,
+                  textTransform: 'none',
+                  '&:hover': { bgcolor: '#ea580c' },
+                }}
+              >
+                Aplicar
+              </Button>
+            </Box>
           </Paper>
+
+          {/* Indicador de período filtrado */}
+          {analyticsData?.period?.filtered && (
+            <Alert
+              severity="info"
+              icon={<CalendarMonthIcon />}
+              sx={{ bgcolor: '#f57c0010', color: '#f97316', border: '1px solid #f57c0030', borderRadius: 2 }}
+            >
+              <strong>Período filtrado:</strong>{' '}
+              {analyticsData.period.startDate} até {analyticsData.period.endDate}
+              {' '}({analyticsData.period.days} dias){' — '}
+              <strong>Total no período: {analyticsData.period.totalKwhInPeriod?.toFixed(1) ?? '—'} kWh</strong>
+            </Alert>
+          )}
 
           {loadingAnalytics && <LinearProgress color="warning" sx={{ borderRadius: 1 }} />}
 

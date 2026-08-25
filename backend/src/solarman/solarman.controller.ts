@@ -1,11 +1,19 @@
 import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common';
 import { SolarmanService } from './solarman.service';
+import { GrowattService } from './growatt.service';
+import { SolplanetService } from './solplanet.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { RoleGuard } from '../auth/role.guard';
 
 @Controller('solarman')
 @UseGuards(RoleGuard)
 export class SolarmanController {
-  constructor(private readonly solarmanService: SolarmanService) {}
+  constructor(
+    private readonly solarmanService: SolarmanService,
+    private readonly growattService: GrowattService,
+    private readonly solplanetService: SolplanetService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   // GET /solarman/readings — retorna cache de leituras de todas as usinas
   @Get('readings')
@@ -13,10 +21,15 @@ export class SolarmanController {
     return this.solarmanService.getAllReadings();
   }
 
-  // GET /solarman/analytics — retorna histórico e métricas de geração (diário, semanal, mensal, comparativo)
+  // GET /solarman/analytics — métricas de geração com filtro de período opcional
+  // Parâmetros: usinaId (opcional), startDate (YYYY-MM-DD), endDate (YYYY-MM-DD)
   @Get('analytics')
-  async getAnalytics(@Query('usinaId') usinaId?: string) {
-    return this.solarmanService.getGenerationAnalytics(usinaId);
+  async getAnalytics(
+    @Query('usinaId') usinaId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.solarmanService.getGenerationAnalytics(usinaId, startDate, endDate);
   }
 
   // GET /solarman/status — verifica configuração do serviço
@@ -69,12 +82,80 @@ export class SolarmanController {
     return this.solarmanService.syncGrowattPlants(body.clientId, body.supplierId);
   }
 
+  /**
+   * GET /solarman/growatt/diagnose — Diagnóstico da API Growatt
+   * Retorna o JSON bruto de cada endpoint para verificar quais campos a API está retornando.
+   * Use para comparar com os valores do app Growatt e identificar discrepâncias.
+   * Query params: deviceSn (obrigatório), supplierId (opcional)
+   */
+  @Get('growatt/diagnose')
+  async diagnoseGrowatt(
+    @Query('deviceSn') deviceSn: string,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    if (!deviceSn) {
+      return { error: 'Parâmetro "deviceSn" é obrigatório. Ex: /solarman/growatt/diagnose?deviceSn=SEU_SN' };
+    }
+
+    let customToken: string | undefined;
+    if (supplierId) {
+      try {
+        const supplier = await this.prisma.dataloggerSupplier.findUnique({ where: { id: supplierId } });
+        customToken = supplier?.token || undefined;
+      } catch (e) { /* ignora */ }
+    }
+
+    const results = await this.growattService.diagnose(deviceSn, customToken);
+
+    return {
+      deviceSn,
+      supplierId: supplierId || 'usando token do .env',
+      note: 'Verifique os campos "extractedFields" — generationToday e generationTotal devem estar em kWh.',
+      results,
+    };
+  }
+
   // ─── Solplanet: Descoberta e Sincronização ────────────────────────────────
 
   // POST /solarman/solplanet/sync — Sincroniza plantas Solplanet → cria/atualiza usinas no banco
   @Post('solplanet/sync')
   async syncSolplanetPlants(@Body() body: { clientId?: string; supplierId?: string }) {
     return this.solarmanService.syncSolplanetPlants(body.clientId, body.supplierId);
+  }
+
+  /**
+   * GET /solarman/solplanet/diagnose — Diagnóstico completo da API Solplanet Pro
+   * Retorna o JSON bruto de cada endpoint e uma recomendação de ação.
+   * Use para verificar se as credenciais estão corretas e se a conta tem acesso à API.
+   * Query params: supplierId (opcional — usa env se não fornecido)
+   */
+  @Get('solplanet/diagnose')
+  async diagnoseSolplanet(@Query('supplierId') supplierId?: string) {
+    let appKey = process.env.SOLPLANET_APP_KEY || '';
+    let appSecret = process.env.SOLPLANET_API_KEY || '';
+    let token: string | undefined;
+    let apiKey: string | undefined;
+
+    if (supplierId) {
+      try {
+        const supplier = await this.prisma.dataloggerSupplier.findUnique({ where: { id: supplierId } });
+        if (supplier) {
+          appKey = supplier.appId || appKey;
+          appSecret = supplier.appSecret || appSecret;
+          token = supplier.token || undefined;
+          apiKey = (supplier as any).apiKey || undefined;
+        }
+      } catch (e) { /* ignora */ }
+    }
+
+    if (!appKey || !appSecret) {
+      return {
+        error: 'Credenciais Solplanet não configuradas.',
+        hint: 'Configure SOLPLANET_APP_KEY e SOLPLANET_API_KEY no .env, ou forneça um supplierId válido.',
+      };
+    }
+
+    return this.solplanetService.diagnose(appKey, appSecret, token, apiKey);
   }
 
   // ─── Solarman Cloud: Sincronização ────────────────────────────────────────
@@ -93,4 +174,3 @@ export class SolarmanController {
     return this.solarmanService.syncAllCloudPlants(body.clientId);
   }
 }
-

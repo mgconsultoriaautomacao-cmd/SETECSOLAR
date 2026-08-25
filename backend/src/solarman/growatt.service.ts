@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
-import * as qs from 'qs';
 
 export interface GrowattReading {
   powerNow: number | null;        // kW
@@ -41,6 +40,89 @@ export interface GrowattDiscoveryResult {
   totalDevices: number;
 }
 
+// ─── Mapeamento robusto de campos de energia da Growatt API ─────────────────
+// A Growatt OpenAPI pode retornar os campos com nomes diferentes dependendo
+// do endpoint e versão do firmware do inversor. Este helper cobre todos os casos.
+function extractGrowattEnergy(data: any): { generationToday: number | null; generationTotal: number | null; powerNow: number | null; temperature: number | null; status: 'ONLINE' | 'OFFLINE' | 'FAULT' } {
+  if (!data) return { generationToday: null, generationTotal: null, powerNow: null, temperature: null, status: 'OFFLINE' };
+
+  // ─── Geração de hoje (kWh) ─────────────────────────────────────────────────
+  // Campos possíveis, por ordem de prioridade (Growatt OpenAPI v4 oficial)
+  const todayRaw =
+    data.eToday    ??  // Growatt OpenAPI v4 oficial
+    data.e_today   ??  // Growatt API alternativo
+    data.today_energy ??
+    data.todayEnergy  ??
+    data.powerToday   ??  // campo legado
+    data.pac_today    ??
+    data.etd          ??
+    data.epvtoday     ??
+    null;
+
+  // ─── Geração total acumulada (kWh) ─────────────────────────────────────────
+  const totalRaw =
+    data.eTotal    ??  // Growatt OpenAPI v4 oficial
+    data.e_total   ??
+    data.total_energy ??
+    data.totalEnergy  ??
+    data.powerTotal   ??  // campo legado
+    data.pac_total    ??
+    data.etotal       ??
+    data.epvtotal     ??
+    null;
+
+  // ─── Potência atual (W → kW) ──────────────────────────────────────────────
+  // pac = Active power in Watts (Growatt padrão)
+  const pacRaw =
+    data.pac          ??  // Growatt oficial (W)
+    data.outputPower  ??
+    data.activepower  ??
+    data.currentPower ??
+    null;
+
+  // ─── Temperatura (°C) ────────────────────────────────────────────────────
+  const tempRaw =
+    data.temperature ??
+    data.temp        ??
+    data.inverterTemp ??
+    null;
+
+  // ─── Status ──────────────────────────────────────────────────────────────
+  const statusCode =
+    data.status       ??
+    data.deviceStatus ??
+    data.workMode     ??
+    null;
+
+  let status: 'ONLINE' | 'OFFLINE' | 'FAULT' = 'ONLINE';
+  if (statusCode === 0 || statusCode === '0' || statusCode === 'offline') status = 'OFFLINE';
+  if (statusCode === 3 || statusCode === '3' || statusCode === 'fault') status = 'FAULT';
+
+  // ─── Parse e validação ─────────────────────────────────────────────────────
+  const generationToday = todayRaw !== null ? parseFloat(String(todayRaw)) : null;
+  const generationTotal = totalRaw !== null ? parseFloat(String(totalRaw)) : null;
+  const pacW = pacRaw !== null ? parseFloat(String(pacRaw)) : null;
+
+  // pac da Growatt OpenAPI vem em Watts — converter para kW
+  // Alguns endpoints já retornam em kW (valor < 100 geralmente = kW)
+  let powerNow: number | null = null;
+  if (pacW !== null && !isNaN(pacW)) {
+    powerNow = pacW > 100 ? pacW / 1000 : pacW; // heurística: > 100 = Watts
+  }
+
+  const temperature = tempRaw !== null && !isNaN(parseFloat(String(tempRaw)))
+    ? parseFloat(String(tempRaw))
+    : null;
+
+  return {
+    generationToday: generationToday !== null && !isNaN(generationToday) ? generationToday : null,
+    generationTotal: generationTotal !== null && !isNaN(generationTotal) ? generationTotal : null,
+    powerNow,
+    temperature,
+    status,
+  };
+}
+
 @Injectable()
 export class GrowattService {
   private readonly logger = new Logger(GrowattService.name);
@@ -51,7 +133,7 @@ export class GrowattService {
     return {
       'token': token,
       'Content-Type': 'application/x-www-form-urlencoded',
-      'User-Agent': 'NestJS Growatt API Client',
+      'User-Agent': 'SETEC-Energia/1.0',
     };
   }
 
@@ -70,6 +152,7 @@ export class GrowattService {
       const response = await axios.get(`${baseUrl}/v1/plant/list`, {
         headers,
         params: { page: 1, perpage: 100 },
+        timeout: 15000,
       });
 
       if (response.data && (response.data.error_code === 0 || response.data.code === 0)) {
@@ -123,6 +206,7 @@ export class GrowattService {
       const response = await axios.get(`${baseUrl}/v1/device/list`, {
         headers,
         params: { plant_id: plantId, page: 1, perpage: 100 },
+        timeout: 15000,
       });
 
       if (response.data && (response.data.error_code === 0 || response.data.code === 0)) {
@@ -176,59 +260,110 @@ export class GrowattService {
   }
 
   // ─── Leitura de dados em tempo real de um dispositivo ──────────────────────
+  // Tenta múltiplos endpoints para compatibilidade máxima com a API Growatt
   async readUsinaFromCloud(deviceSn: string, deviceType: string = 'inv', customToken?: string): Promise<GrowattReading | null> {
-    try {
-      const headers = this.getHeaders(customToken);
+    const headers = this.getHeaders(customToken);
+    const baseUrl = this.defaultBaseUrl;
 
-      // Busca usando a API V1 last_new_data para obter os dados reais mais recentes
-      const response = await axios.get(`${this.defaultBaseUrl}/v1/device/inverter/last_new_data`, {
-        headers,
-        params: {
-          device_sn: deviceSn,
-        },
-      });
+    // Endpoints a tentar em ordem de prioridade
+    const endpoints = [
+      // 1. Endpoint oficial Growatt OpenAPI v4 — dados do inversor
+      { url: `${baseUrl}/v1/device/inverter/last_new_data`, params: { device_sn: deviceSn } },
+      // 2. Fallback: dados mais recentes da planta
+      { url: `${baseUrl}/v1/device/inverter/detail`, params: { device_sn: deviceSn } },
+    ];
 
-      if (response.data && response.data.error_code === 0 && response.data.data) {
-        const data = response.data.data;
+    for (const ep of endpoints) {
+      try {
+        this.logger.debug(`Growatt: tentando ${ep.url} para SN ${deviceSn}`);
+        const response = await axios.get(ep.url, {
+          headers,
+          params: ep.params,
+          timeout: 15000,
+        });
 
-        // pac = potência atual (Watts). Converter para kW
-        const powerNow = data.pac !== undefined && data.pac !== null
-          ? parseFloat(data.pac) / 1000 
-          : null;
+        const code = response.data?.error_code ?? response.data?.code;
 
-        // powerToday (kWh)
-        const generationToday = data.powerToday !== undefined && data.powerToday !== null
-          ? parseFloat(data.powerToday) 
-          : null;
+        if (response.data && (code === 0 || code === '0' || response.data.success)) {
+          // O payload pode estar em data.obj, data.data ou diretamente em data
+          const payload = response.data?.data?.obj
+            ?? response.data?.data
+            ?? response.data?.obj
+            ?? response.data;
 
-        // powerTotal (kWh)
-        const generationTotal = data.powerTotal !== undefined && data.powerTotal !== null
-          ? parseFloat(data.powerTotal) 
-          : null;
+          this.logger.debug(`Growatt raw payload para ${deviceSn}: ${JSON.stringify(payload)}`);
 
-        // temperature (°C)
-        const temperature = data.temperature !== undefined && data.temperature !== null
-          ? parseFloat(data.temperature) 
-          : null;
+          const extracted = extractGrowattEnergy(payload);
 
-        const statusRaw = data.status;
-        let status: 'ONLINE' | 'OFFLINE' | 'FAULT' = 'ONLINE';
-        if (statusRaw === 0) status = 'OFFLINE';
-        if (statusRaw === 3) status = 'FAULT';
+          this.logger.log(
+            `✅ Growatt ${deviceSn}: ` +
+            `powerNow=${extracted.powerNow?.toFixed(2)}kW, ` +
+            `today=${extracted.generationToday}kWh, ` +
+            `total=${extracted.generationTotal}kWh`
+          );
 
-        return {
-          powerNow,
-          generationToday,
-          generationTotal,
-          temperature,
-          status,
-        };
-      } else {
-        this.logger.warn(`Erro na resposta da Growatt API para ${deviceSn}: ${JSON.stringify(response.data)}`);
+          return extracted;
+        } else if (code === 10011 || code === '10011') {
+          this.logger.error(`Token Growatt expirado (10011) ao ler ${deviceSn}`);
+          return null;
+        } else {
+          this.logger.debug(`Growatt endpoint ${ep.url} retornou code=${code}, tentando próximo...`);
+        }
+      } catch (err: any) {
+        this.logger.debug(`Growatt endpoint ${ep.url} falhou: ${err.message}`);
       }
-    } catch (err: any) {
-      this.logger.error(`Erro ao buscar dados do device ${deviceSn} via Growatt API: ${err.message}`);
     }
+
+    this.logger.warn(`Sem dados Growatt para ${deviceSn} em nenhum endpoint.`);
     return null;
+  }
+
+  // ─── Diagnóstico: retorna o JSON bruto da API para inspeção ────────────────
+  // Útil para verificar quais campos a API está realmente retornando
+  async diagnose(deviceSn: string, customToken?: string): Promise<{
+    endpoint: string;
+    statusCode: number;
+    rawResponse: any;
+    extractedFields: any;
+    error?: string;
+  }[]> {
+    const headers = this.getHeaders(customToken);
+    const baseUrl = this.defaultBaseUrl;
+    const results: any[] = [];
+
+    const endpoints = [
+      `${baseUrl}/v1/device/inverter/last_new_data`,
+      `${baseUrl}/v1/device/inverter/detail`,
+      `${baseUrl}/v1/plant/list`,
+    ];
+
+    for (const url of endpoints) {
+      try {
+        const params = url.includes('plant/list')
+          ? { page: 1, perpage: 5 }
+          : { device_sn: deviceSn };
+
+        const response = await axios.get(url, { headers, params, timeout: 10000 });
+        const payload = response.data?.data?.obj ?? response.data?.data ?? response.data;
+        const extracted = url.includes('plant') ? {} : extractGrowattEnergy(payload);
+
+        results.push({
+          endpoint: url,
+          statusCode: response.status,
+          rawResponse: response.data,
+          extractedFields: extracted,
+        });
+      } catch (err: any) {
+        results.push({
+          endpoint: url,
+          statusCode: err.response?.status ?? 0,
+          rawResponse: err.response?.data ?? null,
+          extractedFields: null,
+          error: err.message,
+        });
+      }
+    }
+
+    return results;
   }
 }

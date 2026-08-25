@@ -1302,7 +1302,7 @@ export class SolarmanService implements OnModuleInit {
       }
     }
 
-    // Busca ou cria fornecedor SOLPLANET_CLOUD
+    // Busca ou cria fornecedor SOLPLANET_CLOUD com credenciais corretas
     let solplanetSupplier: any = null;
     if (supplierId) {
       solplanetSupplier = await this.prisma.dataloggerSupplier.findUnique({ where: { id: supplierId } });
@@ -1311,23 +1311,33 @@ export class SolarmanService implements OnModuleInit {
       solplanetSupplier = await this.prisma.dataloggerSupplier.findFirst({ where: { type: 'SOLPLANET_CLOUD' } });
     }
     if (!solplanetSupplier) {
+      // Cria fornecedor com credenciais do .env
       solplanetSupplier = await this.prisma.dataloggerSupplier.create({
         data: {
-          name: 'Solplanet Cloud (Auto)',
+          name: 'Solplanet Cloud (SETEC)',
           type: 'SOLPLANET_CLOUD',
-          appId: '205024856',
-          appSecret: 'QT3qSt0ntxTI8JminCull8p2066zCDnZ',
-          token: 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09',
+          appId: process.env.SOLPLANET_APP_KEY || '205024856',
+          appSecret: process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ',
+          // token Pro separado — deixar vazio até obter da Solplanet
+          token: '',
         },
       });
     }
 
-    const appKey = solplanetSupplier.appId || '205024856';
-    const appSecret = solplanetSupplier.appSecret || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
-    const token = solplanetSupplier.token || 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09';
-    const apiKey = solplanetSupplier.apiKey || undefined;
+    // appKey = ID da conta, appSecret = API Key
+    const appKey = solplanetSupplier.appId || process.env.SOLPLANET_APP_KEY || '205024856';
+    const appSecret = solplanetSupplier.appSecret || process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
+    const token = solplanetSupplier.token || undefined; // Token Pro — opcional
+    const apiKey = (solplanetSupplier as any).apiKey || undefined;
 
     const discovery = await this.solplanetService.discoverSolplanetPlants(appKey, appSecret, token, apiKey);
+
+    // Se não encontrou usinas, retorna o erro real da API (sem dados fictícios)
+    if (discovery.totalPlants === 0 && discovery.error) {
+      result.errors.push(discovery.error);
+      this.logger.warn(`Solplanet sync: ${discovery.error}`);
+      return result;
+    }
 
     const existingUsinas = await this.prisma.usina.findMany({
       select: { id: true, datalogger: true, name: true, gpsLatitude: true, gpsLongitude: true, clientId: true },
@@ -1584,8 +1594,8 @@ export class SolarmanService implements OnModuleInit {
   }
 
 
-  // ─── Analytics e Acompanhamento de Geração (Diário, Semanal, Mensal) ───────
-  async getGenerationAnalytics(usinaId?: string) {
+  // ─── Analytics e Acompanhamento de Geração (Diário, Semanal, Mensal, por Período) ─────
+  async getGenerationAnalytics(usinaId?: string, startDate?: string, endDate?: string) {
     const where: any = {};
     if (usinaId && usinaId !== 'all') {
       where.id = usinaId;
@@ -1605,7 +1615,18 @@ export class SolarmanService implements OnModuleInit {
       usinas = await this.prisma.rest.get('Usina', query);
     }
 
+    // ─── Definição do período de análise ─────────────────────────────────────
     const now = new Date();
+    const periodStart = startDate ? new Date(startDate + 'T00:00:00') : null;
+    const periodEnd   = endDate   ? new Date(endDate   + 'T23:59:59') : null;
+    const hasPeriodFilter = !!(periodStart && periodEnd);
+
+    // Número de dias no período (max 90 dias, padrão 30)
+    let daysInPeriod = 30;
+    if (hasPeriodFilter && periodStart && periodEnd) {
+      const diffMs = periodEnd.getTime() - periodStart.getTime();
+      daysInPeriod = Math.min(90, Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24))));
+    }
 
     let totalCapacityKwp = 0;
     let totalPowerNow = 0;
@@ -1655,14 +1676,19 @@ export class SolarmanService implements OnModuleInit {
     });
 
     const dailyHistory: any[] = [];
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
+    // Gera histórico diário para o período selecionado
+    const historyDays = hasPeriodFilter ? daysInPeriod : 30;
+    const historyStart = hasPeriodFilter && periodStart ? periodStart : new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
+
+    for (let i = 0; i < historyDays; i++) {
+      const d = new Date(historyStart);
+      d.setDate(d.getDate() + i);
       const dateStr = d.toISOString().split('T')[0];
       const dayLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-      
+
       let dayKwh = 0;
       const dayTargetKwh = (totalCapacityKwp * 4.3);
+      const isToday = dateStr === now.toISOString().split('T')[0];
 
       usinas.forEach(u => {
         const cap = u.capacityKwp || 10;
@@ -1671,7 +1697,8 @@ export class SolarmanService implements OnModuleInit {
         dayKwh += (cap * factor);
       });
 
-      if (i === 0 && totalGenerationToday > 0) {
+      // Para o dia de hoje: usa o valor real se disponível
+      if (isToday && totalGenerationToday > 0) {
         dayKwh = totalGenerationToday;
       }
 
@@ -1713,7 +1740,19 @@ export class SolarmanService implements OnModuleInit {
       ? Number((((totalGenerationThisMonth - totalGenerationLastMonth) / totalGenerationLastMonth) * 100).toFixed(1))
       : 0;
 
+    // ─── Total do período filtrado ────────────────────────────────────────────
+    const periodTotalKwh = hasPeriodFilter
+      ? Number(dailyHistory.reduce((sum, d) => sum + d.kwh, 0).toFixed(1))
+      : null;
+
     return {
+      period: {
+        startDate: hasPeriodFilter && periodStart ? periodStart.toISOString().split('T')[0] : null,
+        endDate: hasPeriodFilter && periodEnd ? periodEnd.toISOString().split('T')[0] : null,
+        days: historyDays,
+        filtered: hasPeriodFilter,
+        totalKwhInPeriod: periodTotalKwh,
+      },
       summary: {
         totalUsinas: usinas.length,
         totalCapacityKwp: Number(totalCapacityKwp.toFixed(2)),
