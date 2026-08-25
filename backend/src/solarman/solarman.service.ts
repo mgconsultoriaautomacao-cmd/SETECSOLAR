@@ -328,6 +328,135 @@ export class SolarmanService implements OnModuleInit {
     private solplanetService: SolplanetService,
   ) {}
 
+  // ─── Database Helpers com Fallback Resiliente (Serverless / Supabase REST) ────
+  private async dbGetSupplier(id?: string, type?: string): Promise<any> {
+    if (id) {
+      try {
+        const s = await this.prisma.dataloggerSupplier.findUnique({ where: { id } });
+        if (s) return s;
+      } catch {
+        try {
+          const res = await this.prisma.rest.get('DataloggerSupplier', `id=eq.${id}`);
+          if (res && res.length > 0) return res[0];
+        } catch (e: any) {
+          this.logger.warn(`dbGetSupplier error: ${e.message}`);
+        }
+      }
+    }
+    if (type) {
+      try {
+        const s = await this.prisma.dataloggerSupplier.findFirst({ where: { type } });
+        if (s) return s;
+      } catch {
+        try {
+          const res = await this.prisma.rest.get('DataloggerSupplier', `type=eq.${type}&limit=1`);
+          if (res && res.length > 0) return res[0];
+        } catch (e: any) {
+          this.logger.warn(`dbGetSupplier error: ${e.message}`);
+        }
+      }
+    }
+    return null;
+  }
+
+  private async dbCreateSupplier(data: any): Promise<any> {
+    try {
+      return await this.prisma.dataloggerSupplier.create({ data });
+    } catch {
+      try {
+        return await this.prisma.rest.post('DataloggerSupplier', data);
+      } catch (e: any) {
+        this.logger.warn(`dbCreateSupplier error: ${e.message}`);
+        return null;
+      }
+    }
+  }
+
+  private async dbGetUsinas(where?: any): Promise<any[]> {
+    try {
+      return await this.prisma.usina.findMany({
+        where,
+        include: { client: true, dataloggerSupplier: true },
+      });
+    } catch {
+      try {
+        return await this.prisma.rest.get('Usina', 'select=*,client:Client(*),dataloggerSupplier:DataloggerSupplier(*)');
+      } catch (e: any) {
+        this.logger.warn(`dbGetUsinas error: ${e.message}`);
+        return [];
+      }
+    }
+  }
+
+  private async dbGetClient(id?: string, name?: string): Promise<any> {
+    if (id) {
+      try {
+        const c = await this.prisma.client.findUnique({ where: { id } });
+        if (c) return c;
+      } catch {
+        try {
+          const res = await this.prisma.rest.get('Client', `id=eq.${id}`);
+          if (res && res.length > 0) return res[0];
+        } catch (e: any) {
+          this.logger.warn(`dbGetClient error: ${e.message}`);
+        }
+      }
+    }
+    if (name) {
+      try {
+        const c = await this.prisma.client.findFirst({ where: { name } });
+        if (c) return c;
+      } catch {
+        try {
+          const res = await this.prisma.rest.get('Client', `name=eq.${encodeURIComponent(name)}&limit=1`);
+          if (res && res.length > 0) return res[0];
+        } catch (e: any) {
+          this.logger.warn(`dbGetClient error: ${e.message}`);
+        }
+      }
+    }
+    return null;
+  }
+
+  private async dbCreateClient(data: any): Promise<any> {
+    try {
+      return await this.prisma.client.create({ data });
+    } catch {
+      try {
+        return await this.prisma.rest.post('Client', data);
+      } catch (e: any) {
+        this.logger.warn(`dbCreateClient error: ${e.message}`);
+        return null;
+      }
+    }
+  }
+
+  private async dbCreateUsina(data: any): Promise<any> {
+    try {
+      return await this.prisma.usina.create({ data });
+    } catch {
+      try {
+        return await this.prisma.rest.post('Usina', data);
+      } catch (e: any) {
+        this.logger.warn(`dbCreateUsina error: ${e.message}`);
+        return null;
+      }
+    }
+  }
+
+  private async dbUpdateUsina(id: string, data: any): Promise<any> {
+    try {
+      return await this.prisma.usina.update({ where: { id }, data });
+    } catch {
+      try {
+        return await this.prisma.rest.patch('Usina', id, data);
+      } catch (e: any) {
+        this.logger.warn(`dbUpdateUsina error: ${e.message}`);
+        return null;
+      }
+    }
+  }
+
   private async getCloudToken(supplier?: any): Promise<string | null> {
     const supplierId = supplier?.id || 'default';
     const appId = supplier?.appId || process.env.SOLARMAN_APP_ID || process.env.SOLARMAN_EMAIL;
@@ -474,18 +603,15 @@ export class SolarmanService implements OnModuleInit {
         : 'OFFLINE';
 
       try {
-        await this.prisma.usina.update({
-          where: { id: usina.id },
-          data: {
-            status: dbStatus,
-            powerNow: reading.powerNow,
-            generationToday: reading.generationToday,
-            generationTotal: reading.generationTotal,
-            temperature: reading.temperature,
-            readingLastUpdate: new Date(),
-          },
+        await this.dbUpdateUsina(usina.id, {
+          status: dbStatus,
+          powerNow: reading.powerNow,
+          generationToday: reading.generationToday,
+          generationTotal: reading.generationTotal,
+          temperature: reading.temperature,
+          readingLastUpdate: new Date(),
         });
-      } catch (e) {
+      } catch (e: any) {
         this.logger.error(`Erro ao atualizar usina ${usina.name} no banco: ${e.message}`);
       }
 
@@ -687,10 +813,7 @@ export class SolarmanService implements OnModuleInit {
           targetIp = foundIp;
           const newDatalogger = `${foundIp}:${snStr}`;
           try {
-            await this.prisma.usina.update({
-              where: { id: usinaId },
-              data: { datalogger: newDatalogger },
-            });
+            await this.dbUpdateUsina(usinaId, { datalogger: newDatalogger });
             this.logger.log(`💾 IP do Datalogger atualizado automaticamente no banco para: ${newDatalogger}`);
           } catch (e) {
             // ignora erro ao salvar
@@ -731,14 +854,7 @@ export class SolarmanService implements OnModuleInit {
 
   // ─── Getters para o controller ──────────────────────────────────────────────
   async getAllReadings(): Promise<DeviceReading[]> {
-    let usinas: any[] = [];
-    try {
-      usinas = await this.prisma.usina.findMany({
-        where: { datalogger: { not: '' } },
-      });
-    } catch (e) {
-      usinas = await this.prisma.rest.get('Usina', 'select=*');
-    }
+    const usinas = await this.dbGetUsinas();
 
     return usinas
       .filter(u => u && u.datalogger)
@@ -816,9 +932,7 @@ export class SolarmanService implements OnModuleInit {
 
     let supplier: any = null;
     if (supplierId) {
-      supplier = await this.prisma.dataloggerSupplier.findUnique({
-        where: { id: supplierId },
-      });
+      supplier = await this.dbGetSupplier(supplierId);
     }
 
     // Se o IP for igual a "cloud" ou "SOLARMANCLOUD", tenta testar via API Cloud
@@ -988,28 +1102,24 @@ export class SolarmanService implements OnModuleInit {
     const datalogger = `${finalIp}:${sn}`;
 
     try {
-      const usina = await this.prisma.usina.update({
-        where: { id: usinaId },
-        data: {
-          datalogger,
-          status: 'ONLINE',
-          dataloggerSupplierId: supplierId || null,
-        },
-        include: { dataloggerSupplier: true },
+      const usina = await this.dbUpdateUsina(usinaId, {
+        datalogger,
+        status: 'ONLINE',
+        dataloggerSupplierId: supplierId || null,
       });
 
       // Faz leitura imediata e salva no cache
-      const reading = await this.readUsina(usina.id, usina.name, usina.datalogger, usina.dataloggerSupplier);
-      this.readings.set(usina.id, reading);
+      const reading = await this.readUsina(usinaId, usina?.name || 'Usina', datalogger, usina?.dataloggerSupplier);
+      this.readings.set(usinaId, reading);
 
-      this.logger.log(`✅ Monitoramento ativado para usina ${usina.name} → ${datalogger}`);
+      this.logger.log(`✅ Monitoramento ativado para usina ${usina?.name || usinaId} → ${datalogger}`);
 
       return {
         success: true,
-        message: `Monitoramento ativado para "${usina.name}"! IP descoberto/configurado: ${finalIp}`,
+        message: `Monitoramento ativado para "${usina?.name || usinaId}"! IP descoberto/configurado: ${finalIp}`,
         reading,
       };
-    } catch (e) {
+    } catch (e: any) {
       this.logger.error('Erro ao salvar datalogger:', e);
       return { success: false, message: 'Erro ao salvar configuração no banco de dados.' };
     }
@@ -1021,9 +1131,7 @@ export class SolarmanService implements OnModuleInit {
     let customBaseUrl: string | undefined;
 
     if (supplierId) {
-      const supplier = await this.prisma.dataloggerSupplier.findUnique({
-        where: { id: supplierId },
-      });
+      const supplier = await this.dbGetSupplier(supplierId);
       if (supplier) {
         customToken = supplier.token || undefined;
         // Suporta base URL customizada via campo appId do fornecedor (ex: https://openapi-us.growatt.com)
@@ -1057,7 +1165,7 @@ export class SolarmanService implements OnModuleInit {
     // O ID do cliente será definido por planta caso não seja fornecido um targetClientId global
     if (targetClientId) {
       // Verifica se o cliente existe
-      const client = await this.prisma.client.findUnique({ where: { id: targetClientId } });
+      const client = await this.dbGetClient(targetClientId);
       if (!client) {
         result.errors.push(`Cliente com ID "${targetClientId}" não encontrado.`);
         return result;
@@ -1081,58 +1189,48 @@ export class SolarmanService implements OnModuleInit {
     this.logger.log(`🔄 Sincronizando ${discovery.totalPlants} planta(s) com ${discovery.totalDevices} dispositivo(s)...`);
 
     // Busca todas as usinas existentes para verificar duplicatas
-    const existingUsinas = await this.prisma.usina.findMany({
-      select: { id: true, datalogger: true, name: true, gpsLatitude: true, gpsLongitude: true, clientId: true },
-    });
+    const existingUsinas = await this.dbGetUsinas();
 
     // Helper para mapear ou criar cliente por planta
     const getOrCreateClientForPlant = async (plantName: string): Promise<string> => {
       if (targetClientId) return targetClientId; // Se forçado, usa o forçado
 
       // Busca um cliente existente com o mesmo nome
-      const existingClient = await this.prisma.client.findFirst({
-        where: { name: plantName }
-      });
+      const existingClient = await this.dbGetClient(undefined, plantName);
       if (existingClient) return existingClient.id;
 
       // Cria um novo cliente
-      const newClient = await this.prisma.client.create({
-        data: {
-          name: plantName,
-          email: `importacao_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
-          document: `000000000${Math.floor(Math.random() * 1000)}`,
-          phone: '00000000000',
-          whatsapp: '00000000000',
-          zipCode: '00000000',
-          address: 'Importado via API Growatt',
-          city: 'Importado',
-          state: 'XX',
-          installationDate: new Date(),
-        }
+      const newClient = await this.dbCreateClient({
+        name: plantName,
+        email: `importacao_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
+        document: `000000000${Math.floor(Math.random() * 1000)}`,
+        phone: '00000000000',
+        whatsapp: '00000000000',
+        zipCode: '00000000',
+        address: 'Importado via API Growatt',
+        city: 'Importado',
+        state: 'XX',
+        installationDate: new Date(),
       });
       this.logger.log(`👤 Cliente criado automaticamente: "${plantName}"`);
-      return newClient.id;
+      return newClient?.id || '';
     };
 
     // Busca ou cria o fornecedor Growatt Cloud
     let growattSupplierId = supplierId;
     if (!growattSupplierId) {
       // Tenta encontrar um fornecedor GROWATT_CLOUD existente
-      const existingSupplier = await this.prisma.dataloggerSupplier.findFirst({
-        where: { type: 'GROWATT_CLOUD' },
-      });
+      const existingSupplier = await this.dbGetSupplier(undefined, 'GROWATT_CLOUD');
       if (existingSupplier) {
         growattSupplierId = existingSupplier.id;
       } else {
         // Cria um fornecedor automático
-        const newSupplier = await this.prisma.dataloggerSupplier.create({
-          data: {
-            name: 'Growatt Cloud (Auto)',
-            type: 'GROWATT_CLOUD',
-            token: process.env.GROWATT_API_TOKEN || '',
-          },
+        const newSupplier = await this.dbCreateSupplier({
+          name: 'Growatt Cloud (Auto)',
+          type: 'GROWATT_CLOUD',
+          token: process.env.GROWATT_API_TOKEN || '',
         });
-        growattSupplierId = newSupplier.id;
+        growattSupplierId = newSupplier?.id;
         this.logger.log(`✅ Fornecedor "Growatt Cloud (Auto)" criado automaticamente.`);
       }
     }
@@ -1154,28 +1252,26 @@ export class SolarmanService implements OnModuleInit {
 
         try {
           const plantClientId = await getOrCreateClientForPlant(plantName);
-          await this.prisma.usina.create({
-            data: {
-              name: plantName,
-              clientId: plantClientId,
-              capacityKwp: parseFloat(plant.peakPower) || 0,
-              inverterCapacity: parseFloat(plant.peakPower) || 0,
-              moduleCount: 0,
-              manufacturer: 'Growatt',
-              model: 'Importado via API',
-              utilityCompany: '',
-              estimatedKwh: 0,
-              paybackYears: 0,
-              installationDate: plant.createDate ? new Date(plant.createDate) : new Date(),
-              status: 'ONLINE',
-              datalogger: dataloggerValue,
-              city: plant.city || '',
-              state: '',
-              address: '',
-              dataloggerSupplierId: growattSupplierId,
-              gpsLatitude: plant.gpsLatitude || null,
-              gpsLongitude: plant.gpsLongitude || null,
-            },
+          await this.dbCreateUsina({
+            name: plantName,
+            clientId: plantClientId,
+            capacityKwp: parseFloat(plant.peakPower) || 0,
+            inverterCapacity: parseFloat(plant.peakPower) || 0,
+            moduleCount: 0,
+            manufacturer: 'Growatt',
+            model: 'Importado via API',
+            utilityCompany: '',
+            estimatedKwh: 0,
+            paybackYears: 0,
+            installationDate: plant.createDate ? new Date(plant.createDate) : new Date(),
+            status: 'ONLINE',
+            datalogger: dataloggerValue,
+            city: plant.city || '',
+            state: '',
+            address: '',
+            dataloggerSupplierId: growattSupplierId,
+            gpsLatitude: plant.gpsLatitude || null,
+            gpsLongitude: plant.gpsLongitude || null,
           });
           result.created++;
           result.details.push({ name: plantName, deviceSn: dataloggerValue, action: 'Criada' });
@@ -1222,15 +1318,12 @@ export class SolarmanService implements OnModuleInit {
         // Atualiza o fornecedor se necessário
         try {
           const plantClientId = await getOrCreateClientForPlant(plant?.name || 'Cliente Desconhecido');
-          await this.prisma.usina.update({
-            where: { id: existing.id },
-            data: {
-              clientId: plantClientId, // Atualiza para o cliente correto
-              datalogger: deviceSn,
-              dataloggerSupplierId: growattSupplierId,
-              gpsLatitude: plant?.gpsLatitude || existing.gpsLatitude || null,
-              gpsLongitude: plant?.gpsLongitude || existing.gpsLongitude || null,
-            },
+          await this.dbUpdateUsina(existing.id, {
+            clientId: plantClientId, // Atualiza para o cliente correto
+            datalogger: deviceSn,
+            dataloggerSupplierId: growattSupplierId,
+            gpsLatitude: plant?.gpsLatitude || existing.gpsLatitude || null,
+            gpsLongitude: plant?.gpsLongitude || existing.gpsLongitude || null,
           });
           result.updated++;
           result.details.push({ name: existing.name, deviceSn, action: 'Atualizada (fornecedor vinculado)' });
@@ -1243,28 +1336,26 @@ export class SolarmanService implements OnModuleInit {
 
       try {
         const plantClientId = await getOrCreateClientForPlant(plant?.name || 'Cliente Desconhecido');
-        await this.prisma.usina.create({
-          data: {
-            name: usinaName,
-            clientId: plantClientId,
-            capacityKwp: plant ? parseFloat(plant.peakPower) || 0 : 0,
-            inverterCapacity: plant ? parseFloat(plant.peakPower) || 0 : 0,
-            moduleCount: 0,
-            manufacturer: 'Growatt',
-            model: device.model || 'Importado via API',
-            utilityCompany: '',
-            estimatedKwh: 0,
-            paybackYears: 0,
-            installationDate: plant?.createDate ? new Date(plant.createDate) : new Date(),
-            status: device.status === 1 ? 'ONLINE' : 'OFFLINE',
-            datalogger: deviceSn,
-            city: plant?.city || '',
-            state: '',
-            address: '',
-            dataloggerSupplierId: growattSupplierId,
-            gpsLatitude: plant?.gpsLatitude || null,
-            gpsLongitude: plant?.gpsLongitude || null,
-          },
+        await this.dbCreateUsina({
+          name: usinaName,
+          clientId: plantClientId,
+          capacityKwp: plant ? parseFloat(plant.peakPower) || 0 : 0,
+          inverterCapacity: plant ? parseFloat(plant.peakPower) || 0 : 0,
+          moduleCount: 0,
+          manufacturer: 'Growatt',
+          model: device.model || 'Importado via API',
+          utilityCompany: '',
+          estimatedKwh: 0,
+          paybackYears: 0,
+          installationDate: plant?.createDate ? new Date(plant.createDate) : new Date(),
+          status: device.status === 1 ? 'ONLINE' : 'OFFLINE',
+          datalogger: deviceSn,
+          city: plant?.city || '',
+          state: '',
+          address: '',
+          dataloggerSupplierId: growattSupplierId,
+          gpsLatitude: plant?.gpsLatitude || null,
+          gpsLongitude: plant?.gpsLongitude || null,
         });
         result.created++;
         result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
@@ -1295,7 +1386,7 @@ export class SolarmanService implements OnModuleInit {
 
     let targetClientId = clientId;
     if (targetClientId) {
-      const client = await this.prisma.client.findUnique({ where: { id: targetClientId } });
+      const client = await this.dbGetClient(targetClientId);
       if (!client) {
         result.errors.push(`Cliente com ID "${targetClientId}" não encontrado.`);
         return result;
@@ -1305,30 +1396,28 @@ export class SolarmanService implements OnModuleInit {
     // Busca ou cria fornecedor SOLPLANET_CLOUD com credenciais corretas
     let solplanetSupplier: any = null;
     if (supplierId) {
-      solplanetSupplier = await this.prisma.dataloggerSupplier.findUnique({ where: { id: supplierId } });
+      solplanetSupplier = await this.dbGetSupplier(supplierId);
     }
     if (!solplanetSupplier) {
-      solplanetSupplier = await this.prisma.dataloggerSupplier.findFirst({ where: { type: 'SOLPLANET_CLOUD' } });
+      solplanetSupplier = await this.dbGetSupplier(undefined, 'SOLPLANET_CLOUD');
     }
     if (!solplanetSupplier) {
       // Cria fornecedor com credenciais do .env
-      solplanetSupplier = await this.prisma.dataloggerSupplier.create({
-        data: {
-          name: 'Solplanet Cloud (SETEC)',
-          type: 'SOLPLANET_CLOUD',
-          appId: process.env.SOLPLANET_APP_KEY || '205024856',
-          appSecret: process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ',
-          // token Pro separado — deixar vazio até obter da Solplanet
-          token: '',
-        },
+      solplanetSupplier = await this.dbCreateSupplier({
+        name: 'Solplanet Cloud (SETEC)',
+        type: 'SOLPLANET_CLOUD',
+        appId: process.env.SOLPLANET_APP_KEY || '205024856',
+        appSecret: process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ',
+        // token Pro separado — deixar vazio até obter da Solplanet
+        token: '',
       });
     }
 
     // appKey = ID da conta, appSecret = API Key
-    const appKey = solplanetSupplier.appId || process.env.SOLPLANET_APP_KEY || '205024856';
-    const appSecret = solplanetSupplier.appSecret || process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
-    const token = solplanetSupplier.token || undefined; // Token Pro — opcional
-    const apiKey = (solplanetSupplier as any).apiKey || undefined;
+    const appKey = solplanetSupplier?.appId || process.env.SOLPLANET_APP_KEY || '205024856';
+    const appSecret = solplanetSupplier?.appSecret || process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
+    const token = solplanetSupplier?.token || undefined; // Token Pro — opcional
+    const apiKey = (solplanetSupplier as any)?.apiKey || undefined;
 
     const discovery = await this.solplanetService.discoverSolplanetPlants(appKey, appSecret, token, apiKey);
 
@@ -1339,30 +1428,26 @@ export class SolarmanService implements OnModuleInit {
       return result;
     }
 
-    const existingUsinas = await this.prisma.usina.findMany({
-      select: { id: true, datalogger: true, name: true, gpsLatitude: true, gpsLongitude: true, clientId: true },
-    });
+    const existingUsinas = await this.dbGetUsinas();
 
     const getOrCreateClientForPlant = async (plantName: string): Promise<string> => {
       if (targetClientId) return targetClientId;
-      const existingClient = await this.prisma.client.findFirst({ where: { name: plantName } });
+      const existingClient = await this.dbGetClient(undefined, plantName);
       if (existingClient) return existingClient.id;
 
-      const newClient = await this.prisma.client.create({
-        data: {
-          name: plantName,
-          email: `solplanet_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
-          document: `000000000${Math.floor(Math.random() * 1000)}`,
-          phone: '00000000000',
-          whatsapp: '00000000000',
-          zipCode: '00000000',
-          address: 'Importado via Solplanet API',
-          city: 'Importado',
-          state: 'XX',
-          installationDate: new Date(),
-        },
+      const newClient = await this.dbCreateClient({
+        name: plantName,
+        email: `solplanet_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
+        document: `000000000${Math.floor(Math.random() * 1000)}`,
+        phone: '00000000000',
+        whatsapp: '00000000000',
+        zipCode: '00000000',
+        address: 'Importado via Solplanet API',
+        city: 'Importado',
+        state: 'XX',
+        installationDate: new Date(),
       });
-      return newClient.id;
+      return newClient?.id || '';
     };
 
     for (const dev of discovery.devices) {
@@ -1380,15 +1465,12 @@ export class SolarmanService implements OnModuleInit {
       if (existing) {
         try {
           const plantClientId = await getOrCreateClientForPlant(plant?.name || usinaName);
-          await this.prisma.usina.update({
-            where: { id: existing.id },
-            data: {
-              clientId: plantClientId,
-              datalogger: deviceSn,
-              dataloggerSupplierId: solplanetSupplier.id,
-              gpsLatitude: plant?.gpsLatitude || existing.gpsLatitude || null,
-              gpsLongitude: plant?.gpsLongitude || existing.gpsLongitude || null,
-            },
+          await this.dbUpdateUsina(existing.id, {
+            clientId: plantClientId,
+            datalogger: deviceSn,
+            dataloggerSupplierId: solplanetSupplier?.id,
+            gpsLatitude: plant?.gpsLatitude || existing.gpsLatitude || null,
+            gpsLongitude: plant?.gpsLongitude || existing.gpsLongitude || null,
           });
           result.updated++;
           result.details.push({ name: existing.name, deviceSn, action: 'Atualizada (Solplanet Cloud)' });
@@ -1401,28 +1483,26 @@ export class SolarmanService implements OnModuleInit {
 
       try {
         const plantClientId = await getOrCreateClientForPlant(plant?.name || usinaName);
-        await this.prisma.usina.create({
-          data: {
-            name: usinaName,
-            clientId: plantClientId,
-            capacityKwp: parseFloat(plant?.peakPower) || 12.5,
-            inverterCapacity: parseFloat(plant?.peakPower) || 10.0,
-            moduleCount: 24,
-            manufacturer: 'Solplanet / AISWEI',
-            model: dev.model || 'Solplanet ASW Series',
-            utilityCompany: 'CPFL',
-            estimatedKwh: (parseFloat(plant?.peakPower) || 12.5) * 130,
-            paybackYears: 3.8,
-            installationDate: new Date(),
-            status: 'ONLINE',
-            datalogger: deviceSn,
-            city: plant?.city || 'Campinas - SP',
-            state: 'SP',
-            address: 'Instalação Solar Solplanet',
-            dataloggerSupplierId: solplanetSupplier.id,
-            gpsLatitude: plant?.gpsLatitude || -22.9056,
-            gpsLongitude: plant?.gpsLongitude || -47.0608,
-          },
+        await this.dbCreateUsina({
+          name: usinaName,
+          clientId: plantClientId,
+          capacityKwp: parseFloat(plant?.peakPower) || 12.5,
+          inverterCapacity: parseFloat(plant?.peakPower) || 10.0,
+          moduleCount: 24,
+          manufacturer: 'Solplanet / AISWEI',
+          model: dev.model || 'Solplanet ASW Series',
+          utilityCompany: 'CPFL',
+          estimatedKwh: (parseFloat(plant?.peakPower) || 12.5) * 130,
+          paybackYears: 3.8,
+          installationDate: new Date(),
+          status: 'ONLINE',
+          datalogger: deviceSn,
+          city: plant?.city || 'Campinas - SP',
+          state: 'SP',
+          address: 'Instalação Solar Solplanet',
+          dataloggerSupplierId: solplanetSupplier?.id,
+          gpsLatitude: plant?.gpsLatitude || -22.9056,
+          gpsLongitude: plant?.gpsLongitude || -47.0608,
         });
         result.created++;
         result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
@@ -1460,21 +1540,19 @@ export class SolarmanService implements OnModuleInit {
 
     let supplier: any = null;
     if (supplierId) {
-      supplier = await this.prisma.dataloggerSupplier.findUnique({ where: { id: supplierId } });
+      supplier = await this.dbGetSupplier(supplierId);
     }
     if (!supplier) {
-      supplier = await this.prisma.dataloggerSupplier.findFirst({ where: { type: 'SOLARMAN_CLOUD' } });
+      supplier = await this.dbGetSupplier(undefined, 'SOLARMAN_CLOUD');
     }
     if (!supplier) {
-      supplier = await this.prisma.dataloggerSupplier.create({
-        data: {
-          name: 'Solarman Cloud (Auto)',
-          type: 'SOLARMAN_CLOUD',
-          appId: process.env.SOLARMAN_APP_ID || '',
-          appSecret: process.env.SOLARMAN_APP_SECRET || '',
-          username: process.env.SOLARMAN_EMAIL || '',
-          password: process.env.SOLARMAN_PASSWORD || '',
-        },
+      supplier = await this.dbCreateSupplier({
+        name: 'Solarman Cloud (Auto)',
+        type: 'SOLARMAN_CLOUD',
+        appId: process.env.SOLARMAN_APP_ID || '',
+        appSecret: process.env.SOLARMAN_APP_SECRET || '',
+        username: process.env.SOLARMAN_EMAIL || '',
+        password: process.env.SOLARMAN_PASSWORD || '',
       });
     }
 
@@ -1484,16 +1562,13 @@ export class SolarmanService implements OnModuleInit {
       { name: 'Usina Solarman Central 02', sn: '2375000002', kwp: 25.0, city: 'Jundiaí - SP', lat: -23.1857, lng: -46.8892 },
     ];
 
-    const existingUsinas = await this.prisma.usina.findMany({ select: { id: true, datalogger: true, name: true } });
+    const existingUsinas = await this.dbGetUsinas();
 
     for (const p of solarmanPlants) {
       const existing = existingUsinas.find(u => u.datalogger === p.sn || u.name === p.name);
       if (existing) {
         try {
-          await this.prisma.usina.update({
-            where: { id: existing.id },
-            data: { dataloggerSupplierId: supplier.id, status: 'ONLINE' },
-          });
+          await this.dbUpdateUsina(existing.id, { dataloggerSupplierId: supplier?.id, status: 'ONLINE' });
           result.updated++;
           result.details.push({ name: p.name, deviceSn: p.sn, action: 'Atualizada (Solarman Cloud)' });
         } catch (e) {
@@ -1504,43 +1579,39 @@ export class SolarmanService implements OnModuleInit {
       }
 
       try {
-        const client = await this.prisma.client.findFirst() || await this.prisma.client.create({
-          data: {
-            name: p.name,
-            email: `solarman_${Date.now()}@local`,
-            document: '00000000000',
-            phone: '00000000000',
-            whatsapp: '00000000000',
-            zipCode: '00000000',
-            address: 'Importado Solarman',
-            city: p.city,
-            state: 'SP',
-            installationDate: new Date(),
-          }
+        const client = (await this.dbGetClient()) || await this.dbCreateClient({
+          name: p.name,
+          email: `solarman_${Date.now()}@local`,
+          document: '00000000000',
+          phone: '00000000000',
+          whatsapp: '00000000000',
+          zipCode: '00000000',
+          address: 'Importado Solarman',
+          city: p.city,
+          state: 'SP',
+          installationDate: new Date(),
         });
 
-        await this.prisma.usina.create({
-          data: {
-            name: p.name,
-            clientId: client.id,
-            capacityKwp: p.kwp,
-            inverterCapacity: p.kwp * 0.8,
-            moduleCount: Math.round(p.kwp * 2),
-            manufacturer: 'Solarman',
-            model: 'IGEN / Deye Hybrid',
-            utilityCompany: 'Enel',
-            estimatedKwh: p.kwp * 130,
-            paybackYears: 4.0,
-            installationDate: new Date(),
-            status: 'ONLINE',
-            datalogger: p.sn,
-            city: p.city,
-            state: 'SP',
-            address: 'Instalação Solarman Cloud',
-            dataloggerSupplierId: supplier.id,
-            gpsLatitude: p.lat,
-            gpsLongitude: p.lng,
-          }
+        await this.dbCreateUsina({
+          name: p.name,
+          clientId: client?.id,
+          capacityKwp: p.kwp,
+          inverterCapacity: p.kwp * 0.8,
+          moduleCount: Math.round(p.kwp * 2),
+          manufacturer: 'Solarman',
+          model: 'IGEN / Deye Hybrid',
+          utilityCompany: 'Enel',
+          estimatedKwh: p.kwp * 130,
+          paybackYears: 4.0,
+          installationDate: new Date(),
+          status: 'ONLINE',
+          datalogger: p.sn,
+          city: p.city,
+          state: 'SP',
+          address: 'Instalação Solarman Cloud',
+          dataloggerSupplierId: supplier?.id,
+          gpsLatitude: p.lat,
+          gpsLongitude: p.lng,
         });
         result.created++;
         result.details.push({ name: p.name, deviceSn: p.sn, action: 'Criada' });
