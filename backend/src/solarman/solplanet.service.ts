@@ -21,9 +21,9 @@ export interface SolplanetDiscoveryResult {
 
 // Hosts da API Solplanet Pro (AISWEI Cloud) — EU primeiro, depois global
 const SOLPLANET_HOSTS = [
-  'https://eu-api-genergal.aisweicloud.com',
   'https://api.general.aisweicloud.com',
-  'https://api-genergal.aisweicloud.com',
+  'https://eu-api.general.aisweicloud.com',
+  'https://api.aisweicloud.com',
 ];
 
 @Injectable()
