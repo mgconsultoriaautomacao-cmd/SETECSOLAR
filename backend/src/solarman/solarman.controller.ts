@@ -158,6 +158,20 @@ export class SolarmanController {
     return this.solplanetService.diagnose(appKey, appSecret, token, apiKey);
   }
 
+  // ─── SolisCloud: Descoberta e Sincronização Inicial (21/08/2026) Busca plantas da Solis// ──────────────────────────────
+
+  
+  @Get('solis/plants')
+  async getSolisPlants(@Query('supplierId') supplierId?: string) {
+    return this.solarmanService.discoverSolisPlants(supplierId);
+  }
+
+  // POST /solarman/solis/sync — Sincroniza plantas SolisCloud → cria/atualiza usinas no banco
+  @Post('solis/sync')
+  async syncSolisPlants(@Body() body: { clientId?: string; supplierId?: string }) {
+    return this.solarmanService.syncSolisPlants(body.clientId, body.supplierId);
+  }
+
   // ─── Solarman Cloud: Sincronização ────────────────────────────────────────
 
   // POST /solarman/solarman/sync — Sincroniza plantas Solarman Cloud → cria/atualiza usinas no banco
@@ -168,9 +182,10 @@ export class SolarmanController {
 
   // ─── Sincronização Unificada (Todos os Fornecedores Cloud) ────────────────
 
-  // POST /solarman/sync-all — Sincroniza Growatt, Solplanet e Solarman de uma só vez
+  // POST /solarman/sync-all — Sincroniza Growatt, Solis, Solplanet e Solarman de uma só vez
   @Post('sync-all')
   async syncAllCloudPlants(@Body() body: { clientId?: string }) {
     return this.solarmanService.syncAllCloudPlants(body.clientId);
   }
 }
+

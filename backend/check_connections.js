@@ -219,10 +219,53 @@ async function checkSolplanet() {
 }
 
 
-// ─── 5. SOLARMAN API ─────────────────────────────────────────────────────────
+// ─── 5. SOLIS CLOUD API ───────────────────────────────────────────────────────
+async function checkSolis() {
+  console.log('\n══════════════════════════════════════════════');
+  console.log('  5. SOLIS Cloud Open API');
+  console.log('══════════════════════════════════════════════');
+
+  const keyId = process.env.SOLIS_KEY_ID;
+  const keySecret = process.env.SOLIS_KEY_SECRET;
+
+  if (!keyId || !keySecret) {
+    console.log(WARN('Credenciais SolisCloud (SOLIS_KEY_ID, SOLIS_KEY_SECRET) não configuradas no .env'));
+    return;
+  }
+
+  const path = '/v1/api/userStationList';
+  const bodyStr = JSON.stringify({ pageNo: 1, pageSize: 10 });
+  const contentMd5 = crypto.createHash('md5').update(bodyStr, 'utf8').digest('base64');
+  const dateStr = new Date().toUTCString();
+  const stringToSign = `POST\n${contentMd5}\napplication/json\n${dateStr}\n${path}`;
+  const signature = crypto.createHmac('sha1', keySecret).update(stringToSign, 'utf8').digest('base64');
+
+  try {
+    const res = await axios.post(`https://www.soliscloud.com:13333${path}`, bodyStr, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-MD5': contentMd5,
+        'Date': dateStr,
+        'Authorization': `API ${keyId}:${signature}`,
+      },
+      timeout: 10000,
+    });
+    if (res.data?.code === '0') {
+      const records = res.data?.data?.page?.records || [];
+      console.log(OK(`SolisCloud API OK — código 0 | Usinas encontradas: ${records.length}`));
+      records.forEach(r => console.log(`   🌱 [Solis] ${r.stationName} (Capacidade: ${r.capacity || r.installedCapacity} kWp)`));
+    } else {
+      console.log(WARN(`SolisCloud resposta: ${JSON.stringify(res.data)}`));
+    }
+  } catch (e) {
+    console.log(FAIL(`SolisCloud falhou: ${e.message}`));
+  }
+}
+
+// ─── 6. SOLARMAN API ─────────────────────────────────────────────────────────
 async function checkSolarman() {
   console.log('\n══════════════════════════════════════════════');
-  console.log('  5. SOLARMAN PV API');
+  console.log('  6. SOLARMAN PV API');
   console.log('══════════════════════════════════════════════');
 
   const appId     = process.env.SOLARMAN_APP_ID;
@@ -262,6 +305,7 @@ async function main() {
   await checkDatabase();
   await checkSupabase();
   await checkGrowatt();
+  await checkSolis();
   await checkSolplanet();
   await checkSolarman();
 
@@ -271,3 +315,4 @@ async function main() {
 }
 
 main().catch(console.error);
+

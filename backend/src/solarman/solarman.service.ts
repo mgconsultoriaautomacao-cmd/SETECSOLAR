@@ -4,6 +4,8 @@ import axios from 'axios';
 import * as crypto from 'crypto';
 import { GrowattService, GrowattDiscoveryResult, GrowattDevice } from './growatt.service';
 import { SolplanetService } from './solplanet.service';
+import { SolisService, SolisDiscoveryResult } from './solis.service';
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Protocolo SolarmanV5 — leitura direta no WiFi Stick pela rede local/internet
@@ -326,7 +328,9 @@ export class SolarmanService implements OnModuleInit {
     private prisma: PrismaService,
     private growattService: GrowattService,
     private solplanetService: SolplanetService,
+    private solisService: SolisService,
   ) {}
+
 
   // ─── Database Helpers com Fallback Resiliente (Serverless / Supabase REST) ────
   private async dbGetSupplier(id?: string, type?: string): Promise<any> {
@@ -749,7 +753,37 @@ export class SolarmanService implements OnModuleInit {
           errorMessage: `Sem resposta da Solplanet Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
         };
       }
+
+      if (supplier.type === 'SOLIS_CLOUD' || supplier.type === 'SOLIS') {
+        const keyId = supplier.appId || process.env.SOLIS_KEY_ID || '';
+        const keySecret = supplier.appSecret || process.env.SOLIS_KEY_SECRET || '';
+        const solisData = await this.solisService.readUsinaFromCloud(cleanDatalogger, keyId, keySecret);
+        if (solisData) {
+          return {
+            usinaId, usinaNome, deviceSn: cleanDatalogger,
+            ipAddress: 'SolisCloud API',
+            powerNow: solisData.powerNow,
+            generationToday: solisData.generationToday,
+            generationTotal: solisData.generationTotal,
+            gridVoltage: null, gridFrequency: null,
+            temperature: solisData.temperature,
+            dcPower: null,
+            status: solisData.status,
+            lastUpdate: new Date(),
+          };
+        }
+        return {
+          usinaId, usinaNome, deviceSn: cleanDatalogger,
+          ipAddress: 'SolisCloud',
+          powerNow: null, generationToday: null, generationTotal: null,
+          gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+          status: 'OFFLINE', lastUpdate: new Date(),
+          errorMessage: `Sem resposta da SolisCloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
+        };
+      }
     }
+
+
 
     // Se NÃO contém dois pontos (:), tenta ler via Solarman Cloud API legado (Global)
     if (!cleanDatalogger.includes(':')) {
@@ -1008,6 +1042,38 @@ export class SolarmanService implements OnModuleInit {
         message: `Erro ao conectar via Solplanet API. Verifique se o S/N está correto e se as credenciais do fornecedor "${supplier.name}" estão configuradas.`,
       };
     }
+
+    // Se o IP for igual a "solis" ou "soliscloud", tenta testar via API SolisCloud
+    if (ip.toLowerCase() === 'solis' || ip.toLowerCase() === 'soliscloud') {
+      const keyId = supplier?.appId || process.env.SOLIS_KEY_ID || '';
+      const keySecret = supplier?.appSecret || process.env.SOLIS_KEY_SECRET || '';
+      if (!keyId || !keySecret) {
+        return {
+          success: false,
+          message: 'Credenciais SolisCloud (KeyID/KeySecret) não configuradas.',
+        };
+      }
+      const solisData = await this.solisService.readUsinaFromCloud(sn, keyId, keySecret);
+      if (solisData) {
+        return {
+          success: true,
+          message: `✅ Inversor conectado via SolisCloud API com sucesso!`,
+          discoveredIp: 'SolisCloud',
+          data: {
+            powerNow: solisData.powerNow,
+            generationToday: solisData.generationToday,
+            generationTotal: solisData.generationTotal,
+            temperature: solisData.temperature,
+            status: solisData.status,
+          } as any,
+        };
+      }
+      return {
+        success: false,
+        message: `Sem resposta da SolisCloud API para o SN "${sn}". Verifique se o número de série está correto.`,
+      };
+    }
+
 
     // MOCK MODE FALLBACK: Se o S/N contiver a palavra "MOCK" ou for "0", gera dados fictícios realistas
     if (sn && (sn.toUpperCase().includes('MOCK') || sn === '0')) {
@@ -1522,7 +1588,173 @@ export class SolarmanService implements OnModuleInit {
     return result;
   }
 
+  // ─── SolisCloud: Descoberta de plantas e dispositivos ──────────────────────
+  async discoverSolisPlants(supplierId?: string): Promise<SolisDiscoveryResult> {
+    let keyId = process.env.SOLIS_KEY_ID || '';
+    let keySecret = process.env.SOLIS_KEY_SECRET || '';
+
+    if (supplierId) {
+      const supplier = await this.dbGetSupplier(supplierId);
+      if (supplier) {
+        keyId = supplier.appId || keyId;
+        keySecret = supplier.appSecret || keySecret;
+      }
+    }
+
+    if (!keyId || !keySecret) {
+      return { plants: [], devices: [], totalPlants: 0, totalDevices: 0 };
+    }
+
+    return this.solisService.discoverAll(keyId, keySecret);
+  }
+
+  // ─── SolisCloud: Sincronização de plantas → Usinas no banco ────────────────
+  async syncSolisPlants(clientId?: string, supplierId?: string): Promise<{
+    created: number;
+    skipped: number;
+    updated: number;
+    errors: string[];
+    details: { name: string; deviceSn: string; action: string }[];
+  }> {
+    const result = {
+      created: 0,
+      skipped: 0,
+      updated: 0,
+      errors: [] as string[],
+      details: [] as { name: string; deviceSn: string; action: string }[],
+    };
+
+    let solisSupplier: any = null;
+    if (supplierId) {
+      solisSupplier = await this.dbGetSupplier(supplierId);
+    }
+    if (!solisSupplier) {
+      solisSupplier = await this.dbGetSupplier(undefined, 'SOLIS_CLOUD');
+    }
+    if (!solisSupplier) {
+      solisSupplier = await this.dbCreateSupplier({
+        name: 'SolisCloud',
+        type: 'SOLIS_CLOUD',
+        appId: process.env.SOLIS_KEY_ID || '',
+        appSecret: process.env.SOLIS_KEY_SECRET || '',
+      });
+    }
+
+    const keyId = solisSupplier?.appId || process.env.SOLIS_KEY_ID || '';
+    const keySecret = solisSupplier?.appSecret || process.env.SOLIS_KEY_SECRET || '';
+
+    if (!keyId || !keySecret) {
+      result.errors.push('Credenciais SolisCloud (KeyID/KeySecret) não configuradas.');
+      return result;
+    }
+
+    let discovery: SolisDiscoveryResult;
+    try {
+      discovery = await this.solisService.discoverAll(keyId, keySecret);
+    } catch (e: any) {
+      result.errors.push(`Erro ao consultar API SolisCloud: ${e.message}`);
+      return result;
+    }
+
+    if (discovery.totalPlants === 0 && discovery.totalDevices === 0) {
+      result.errors.push('Nenhuma usina ou inversor encontrado na conta SolisCloud.');
+      return result;
+    }
+
+    const existingUsinas = await this.dbGetUsinas();
+
+    const getOrCreateClient = async (name: string): Promise<string> => {
+      if (clientId) return clientId;
+      const existing = await this.dbGetClient(undefined, name);
+      if (existing) return existing.id;
+
+      const created = await this.dbCreateClient({
+        name,
+        email: `solis_${Date.now()}@local`,
+        document: '00000000000',
+        phone: '00000000000',
+        whatsapp: '00000000000',
+        zipCode: '00000000',
+        address: 'Importado SolisCloud API',
+        city: 'Importado',
+        state: 'RN',
+        installationDate: new Date(),
+      });
+      return created?.id || '';
+    };
+
+    for (const dev of discovery.devices) {
+      const deviceSn = dev.deviceSn;
+      const usinaName = dev.stationName ? `${dev.stationName} — ${deviceSn}` : `Solis ${deviceSn}`;
+      const plant = discovery.plants.find(p => p.stationId === dev.stationId) || discovery.plants[0];
+
+      const existing = existingUsinas.find(u =>
+        u.datalogger === deviceSn ||
+        u.datalogger.includes(deviceSn) ||
+        u.name === usinaName
+      );
+
+      if (existing) {
+        try {
+          const clientTargetId = await getOrCreateClient(plant?.name || dev.stationName || 'Cliente Solis');
+          await this.dbUpdateUsina(existing.id, {
+            clientId: clientTargetId,
+            datalogger: deviceSn,
+            dataloggerSupplierId: solisSupplier?.id,
+            gpsLatitude: plant?.latitude || existing.gpsLatitude || null,
+            gpsLongitude: plant?.longitude || existing.gpsLongitude || null,
+            status: 'ONLINE',
+          });
+          result.updated++;
+          result.details.push({ name: existing.name, deviceSn, action: 'Atualizada (SolisCloud)' });
+        } catch (e) {
+          result.skipped++;
+          result.details.push({ name: existing.name, deviceSn, action: 'Já existe' });
+        }
+        continue;
+      }
+
+      try {
+        const clientTargetId = await getOrCreateClient(plant?.name || dev.stationName || 'Cliente Solis');
+        const cap = dev.powerKw || plant?.capacityKwp || 8.0;
+
+        await this.dbCreateUsina({
+          name: usinaName,
+          clientId: clientTargetId,
+          capacityKwp: cap,
+          inverterCapacity: cap,
+          moduleCount: Math.round(cap * 2),
+          manufacturer: 'Solis',
+          model: dev.model || 'Solis-1P8K-5G Brazil',
+          utilityCompany: 'Cosern / Neoenergia',
+          estimatedKwh: cap * 135,
+          paybackYears: 3.5,
+          installationDate: new Date(),
+          status: 'ONLINE',
+          datalogger: deviceSn,
+          city: plant?.city || 'Tibau',
+          state: plant?.region || 'RN',
+          address: plant?.address || 'Instalação Solis',
+          dataloggerSupplierId: solisSupplier?.id,
+          gpsLatitude: plant?.latitude || null,
+          gpsLongitude: plant?.longitude || null,
+        });
+        result.created++;
+        result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
+      } catch (err: any) {
+        result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
+      }
+    }
+
+    if (result.created > 0 || result.updated > 0) {
+      await this.pollAll();
+    }
+
+    return result;
+  }
+
   // ─── Solarman Cloud: Sincronização de plantas → Usinas no banco ──────────────
+
   async syncSolarmanPlants(clientId?: string, supplierId?: string): Promise<{
     created: number;
     skipped: number;
@@ -1672,9 +1904,13 @@ export class SolarmanService implements OnModuleInit {
     errors: string[];
     details: { name: string; deviceSn: string; action: string }[];
   }> {
-    this.logger.log('🌐 Iniciando Sincronização Unificada de Todos os Fornecedores Cloud (Growatt, Solplanet, Solarman)...');
-    
+    this.logger.log('🌐 Iniciando Sincronização Unificada de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman)...');
+
     const growattRes = await this.syncGrowattPlants(clientId).catch(err => ({
+      created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
+    }));
+
+    const solisRes = await this.syncSolisPlants(clientId).catch(err => ({
       created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
     }));
 
@@ -1686,11 +1922,12 @@ export class SolarmanService implements OnModuleInit {
       created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
     }));
 
-    const totalCreated = growattRes.created + solplanetRes.created + solarmanRes.created;
-    const totalUpdated = growattRes.updated + solplanetRes.updated + solarmanRes.updated;
-    const totalSkipped = growattRes.skipped + solplanetRes.skipped + solarmanRes.skipped;
-    const allErrors = [...growattRes.errors, ...solplanetRes.errors, ...solarmanRes.errors];
-    const allDetails = [...growattRes.details, ...solplanetRes.details, ...solarmanRes.details];
+    const totalCreated = growattRes.created + solisRes.created + solplanetRes.created + solarmanRes.created;
+    const totalUpdated = growattRes.updated + solisRes.updated + solplanetRes.updated + solarmanRes.updated;
+    const totalSkipped = growattRes.skipped + solisRes.skipped + solplanetRes.skipped + solarmanRes.skipped;
+    const allErrors = [...growattRes.errors, ...solisRes.errors, ...solplanetRes.errors, ...solarmanRes.errors];
+    const allDetails = [...growattRes.details, ...solisRes.details, ...solplanetRes.details, ...solarmanRes.details];
+
 
     return {
       created: totalCreated,
@@ -1929,8 +2166,29 @@ export class SolarmanService implements OnModuleInit {
           }
         }
 
+        // ─── Solis Cloud ────────────────────────────────────────────────
+        else if (supplier.type === 'SOLIS_CLOUD' || supplier.type === 'SOLIS') {
+          const keyId = supplier.appId || process.env.SOLIS_KEY_ID || '';
+          const keySecret = supplier.appSecret || process.env.SOLIS_KEY_SECRET || '';
+
+          if (!keyId || !keySecret) {
+            item.status = 'NOT_CONFIGURED';
+            item.message = 'Credenciais SolisCloud (KeyID/KeySecret) não configuradas no fornecedor.';
+          } else {
+            const plants = await this.solisService.listStations(keyId, keySecret);
+            if (plants && plants.length >= 0) {
+              item.status = 'OK';
+              item.message = `Conectado com sucesso. ${plants.length} usina(s) encontrada(s).`;
+            } else {
+              item.status = 'ERROR';
+              item.message = 'Falha ao autenticar na API SolisCloud. Verifique KeyID e KeySecret.';
+            }
+          }
+        }
+
         // ─── Solplanet Cloud ────────────────────────────────────────────
         else if (supplier.type === 'SOLPLANET_CLOUD' || supplier.type === 'AISWEI_CLOUD') {
+
           const appKey    = supplier.appId     || '';
           const appSecret = supplier.appSecret || '';
           const token     = supplier.token     || '';
