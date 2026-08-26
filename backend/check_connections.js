@@ -143,29 +143,30 @@ async function checkSolplanet() {
   console.log('  4. SOLPLANET Aiswei Cloud API');
   console.log('══════════════════════════════════════════════');
 
-  // Busca credenciais do banco de dados
-  let APP_KEY, APP_SECRET, TOKEN;
+  // Busca credenciais do banco de dados (com fallback para .env)
+  let APP_KEY    = process.env.SOLPLANET_APP_KEY || '';
+  let APP_SECRET = process.env.SOLPLANET_API_KEY || '';
+  let TOKEN      = process.env.SOLPLANET_TOKEN   || '';
   try {
     const dbSupplier = await prisma.dataloggerSupplier.findFirst({ where: { type: 'SOLPLANET_CLOUD' } });
     if (dbSupplier) {
-      APP_KEY    = dbSupplier.appId     || '';
-      APP_SECRET = dbSupplier.appSecret || '';
-      TOKEN      = dbSupplier.token     || '';
-      console.log(INFO('Credenciais Solplanet carregadas do banco.'));
+      if (dbSupplier.appId) APP_KEY = dbSupplier.appId;
+      if (dbSupplier.appSecret) APP_SECRET = dbSupplier.appSecret;
+      if (dbSupplier.token) TOKEN = dbSupplier.token;
+      console.log(INFO('Credenciais Solplanet carregadas (banco/env).'));
     }
   } catch(e) { /* ignora erro ao buscar */ }
 
   if (!APP_KEY || !APP_SECRET || !TOKEN) {
-    console.log(WARN('Credenciais Solplanet (appId/appSecret/token) não configuradas no banco.'));
-    console.log(INFO('Configure o fornecedor SOLPLANET_CLOUD no banco com appId, appSecret e token.'));
+    console.log(WARN('Credenciais Solplanet (appId/appSecret/token) não configuradas.'));
     return;
   }
 
-  // Hosts corretos — pro-cloud.solplanet.net retorna HTTP 444 (bloqueado)
+  // Hosts corretos Aiswei Cloud API
   const HOSTS = [
-    'https://eu-api-genergal.aisweicloud.com',
     'https://api.general.aisweicloud.com',
-    'https://api-genergal.aisweicloud.com',
+    'https://eu-api.general.aisweicloud.com',
+    'https://api.aisweicloud.com',
   ];
 
   function makeHeaders(endpoint) {
