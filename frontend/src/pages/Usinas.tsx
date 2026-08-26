@@ -107,7 +107,7 @@ export default function Usinas() {
   const [syncResult, setSyncResult] = useState<any>(null);
   const [syncStep, setSyncStep] = useState<'config' | 'preview' | 'result'>('config');
   const [syncMenuAnchor, setSyncMenuAnchor] = useState<null | HTMLElement>(null);
-  const [syncProvider, setSyncProvider] = useState<'ALL' | 'GROWATT' | 'SOLPLANET' | 'SOLARMAN'>('ALL');
+  const [syncProvider, setSyncProvider] = useState<'ALL' | 'GROWATT' | 'SOLIS' | 'SOLPLANET' | 'SOLARMAN'>('ALL');
 
   const handleOpenSyncMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
     setSyncMenuAnchor(event.currentTarget);
@@ -117,7 +117,7 @@ export default function Usinas() {
     setSyncMenuAnchor(null);
   };
 
-  const handleDirectSync = async (provider: 'ALL' | 'GROWATT' | 'SOLPLANET' | 'SOLARMAN' = 'ALL') => {
+  const handleDirectSync = async (provider: 'ALL' | 'GROWATT' | 'SOLIS' | 'SOLPLANET' | 'SOLARMAN' = 'ALL') => {
     handleCloseSyncMenu();
     setSyncProvider(provider);
     setSyncModalOpen(true);
@@ -132,6 +132,10 @@ export default function Usinas() {
       endpoint = '/solarman/growatt/sync';
       const supp = suppliers.find(s => s.type === 'GROWATT_CLOUD');
       supplierId = supp?.id;
+    } else if (provider === 'SOLIS') {
+      endpoint = '/solarman/solis/sync';
+      const supp = suppliers.find(s => s.type === 'SOLIS_CLOUD' || s.type === 'SOLIS');
+      supplierId = supp?.id;
     } else if (provider === 'SOLPLANET') {
       endpoint = '/solarman/solplanet/sync';
       const supp = suppliers.find(s => s.type === 'SOLPLANET_CLOUD');
@@ -141,6 +145,7 @@ export default function Usinas() {
       const supp = suppliers.find(s => s.type === 'SOLARMAN_CLOUD');
       supplierId = supp?.id;
     }
+
 
     try {
       const r = await fetch(`${API_URL}${endpoint}`, {
@@ -476,15 +481,19 @@ export default function Usinas() {
             <MenuItem onClick={() => handleDirectSync('ALL')} sx={{ fontWeight: 700, color: '#f97316' }}>
               🌐 Sincronizar Tudo (Todas as Usinas Cloud)
             </MenuItem>
-            <MenuItem onClick={() => handleDirectSync('SOLPLANET')}>
-              🟠 Sincronizar Solplanet (AISWEI)
-            </MenuItem>
             <MenuItem onClick={() => handleDirectSync('GROWATT')}>
               🟢 Sincronizar Growatt
+            </MenuItem>
+            <MenuItem onClick={() => handleDirectSync('SOLIS')}>
+              🟡 Sincronizar SolisCloud (Ginlong Solis)
+            </MenuItem>
+            <MenuItem onClick={() => handleDirectSync('SOLPLANET')}>
+              🟠 Sincronizar Solplanet (AISWEI)
             </MenuItem>
             <MenuItem onClick={() => handleDirectSync('SOLARMAN')}>
               🔵 Sincronizar Solarman Cloud
             </MenuItem>
+
           </Menu>
           <Button
             variant="contained"
@@ -1066,12 +1075,38 @@ export default function Usinas() {
                     onChange={e => handleTypeChange(e.target.value)}
                   >
                     <MenuItem value="GROWATT_CLOUD">Growatt OpenAPI Cloud</MenuItem>
+                    <MenuItem value="SOLIS_CLOUD">SolisCloud Open API (Ginlong Solis)</MenuItem>
                     <MenuItem value="SOLARMAN_CLOUD">Solarman OpenAPI Cloud</MenuItem>
                     <MenuItem value="SOLPLANET_CLOUD">Solplanet Cloud API</MenuItem>
                     <MenuItem value="MODBUS_LOCAL">Modbus TCP Direto (Local)</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
+
+              {supplierForm.type === 'SOLIS_CLOUD' && (
+                <>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="Key ID (SolisCloud)"
+                      fullWidth
+                      value={supplierForm.appId}
+                      onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
+                      placeholder="Ex: 1300386381676729641"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="Key Secret (SolisCloud)"
+                      fullWidth
+                      value={supplierForm.appSecret}
+                      onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value })}
+                      placeholder="Ex: c526acc1c0ec4e57b12f42c3ff922ee8"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                </>
+              )}
 
               {supplierForm.type === 'GROWATT_CLOUD' && (
                 <Grid size={12}>
@@ -1085,6 +1120,7 @@ export default function Usinas() {
                   />
                 </Grid>
               )}
+
 
               {supplierForm.type === 'SOLARMAN_CLOUD' && (
                 <>
@@ -1242,6 +1278,8 @@ export default function Usinas() {
           <SyncIcon sx={{ color: '#f97316' }} />
           {syncProvider === 'ALL'
             ? 'Sincronizar Usinas — Todos os Fornecedores Cloud'
+            : syncProvider === 'SOLIS'
+            ? 'Sincronizar Usinas — SolisCloud (Ginlong Solis)'
             : syncProvider === 'SOLPLANET'
             ? 'Sincronizar Usinas — Solplanet Cloud (AISWEI)'
             : syncProvider === 'SOLARMAN'
@@ -1257,7 +1295,9 @@ export default function Usinas() {
                 <CircularProgress color="primary" />
                 <Typography sx={{ color: '#94a3b8' }}>
                   {syncProvider === 'ALL'
-                    ? 'Buscando plantas e dispositivos em todos os portais Cloud (Growatt, Solplanet, Solarman)...'
+                    ? 'Buscando plantas e dispositivos em todos os portais Cloud (Growatt, Solis, Solplanet, Solarman)...'
+                    : syncProvider === 'SOLIS'
+                    ? 'Buscando plantas e dispositivos na SolisCloud API...'
                     : syncProvider === 'SOLPLANET'
                     ? 'Buscando plantas e dispositivos na API da Solplanet (AISWEI)...'
                     : syncProvider === 'SOLARMAN'
@@ -1266,6 +1306,7 @@ export default function Usinas() {
                 </Typography>
               </Box>
             )}
+
 
             {syncStep === 'result' && syncResult && !syncLoading && (
               <>

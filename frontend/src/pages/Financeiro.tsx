@@ -66,16 +66,8 @@ export default function Financeiro() {
   const [isDemo, setIsDemo] = useState(false);
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState<FinancialRecord[]>([]);
-  const [summary, setSummary] = useState({
-    mrr: 0,
-    totalRecebido: 0,
-    totalPendente: 0,
-    totalAtrasado: 0,
-    totalPagar: 0,
-    lucroEstimado: 0
-  });
-
   const [gmailAccounts, setGmailAccounts] = useState<GmailAccount[]>([]);
+
   const [selectedGmail, setSelectedGmail] = useState<string>('');
   const [emails, setEmails] = useState<GmailEmail[]>([]);
   const [loadingEmails, setLoadingEmails] = useState(false);
@@ -83,6 +75,43 @@ export default function Financeiro() {
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [datePreset, setDatePreset] = useState<'TODOS' | 'HOJE' | 'MES_ATUAL' | '30_DIAS' | 'ANO_ATUAL' | 'CUSTOM'>('MES_ATUAL');
+  const [startDate, setStartDate] = useState<string>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  });
+  const [endDate, setEndDate] = useState<string>(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+  });
+
+  const applyDatePreset = (preset: 'TODOS' | 'HOJE' | 'MES_ATUAL' | '30_DIAS' | 'ANO_ATUAL') => {
+    setDatePreset(preset);
+    const now = new Date();
+    if (preset === 'TODOS') {
+      setStartDate('');
+      setEndDate('');
+    } else if (preset === 'HOJE') {
+      const todayStr = now.toISOString().split('T')[0];
+      setStartDate(todayStr);
+      setEndDate(todayStr);
+    } else if (preset === 'MES_ATUAL') {
+      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+      setStartDate(firstDay);
+      setEndDate(lastDay);
+    } else if (preset === '30_DIAS') {
+      const past30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().split('T')[0];
+      const todayStr = now.toISOString().split('T')[0];
+      setStartDate(past30);
+      setEndDate(todayStr);
+    } else if (preset === 'ANO_ATUAL') {
+      const firstDay = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
+      const lastDay = new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
+      setStartDate(firstDay);
+      setEndDate(lastDay);
+    }
+  };
 
   // Modal form states
   const [openModal, setOpenModal] = useState(false);
@@ -133,19 +162,6 @@ export default function Financeiro() {
     }
   };
 
-  const fetchSummary = async () => {
-    try {
-      const response = await fetch(`${API_URL}/financial/summary`, {
-        headers: getHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data);
-      }
-    } catch (err) {
-      console.error('Erro ao buscar resumo financeiro:', err);
-    }
-  };
 
   const fetchGmailAccounts = async () => {
     try {
@@ -198,7 +214,7 @@ export default function Financeiro() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchRecords(), fetchSummary(), fetchGmailAccounts(), checkDemoMode()]).finally(() => {
+    Promise.all([fetchRecords(), fetchGmailAccounts(), checkDemoMode()]).finally(() => {
       setLoading(false);
     });
   }, []);
@@ -265,7 +281,6 @@ export default function Financeiro() {
           clientId: '',
         });
         fetchRecords();
-        fetchSummary();
       } else {
         alert('Erro ao salvar registro.');
       }
@@ -283,7 +298,6 @@ export default function Financeiro() {
       });
       if (response.ok) {
         fetchRecords();
-        fetchSummary();
       } else {
         alert('Erro ao deletar registro.');
       }
@@ -304,7 +318,6 @@ export default function Financeiro() {
       });
       if (response.ok) {
         fetchRecords();
-        fetchSummary();
       } else {
         alert('Erro ao atualizar status.');
       }
@@ -312,6 +325,7 @@ export default function Financeiro() {
       console.error('Erro ao marcar como pago:', err);
     }
   };
+
 
   const handleConnectGmail = async () => {
     try {
@@ -429,7 +443,7 @@ export default function Financeiro() {
       description: record.description,
       amount: record.amount.toString(),
       dueDate: record.dueDate.split('T')[0],
-      entryDate: record.entryDate.split('T')[0],
+      entryDate: record.entryDate ? record.entryDate.split('T')[0] : '',
       status: record.status,
       supplierOrClient: record.supplierOrClient,
       ticketInfo: record.ticketInfo || '',
@@ -483,7 +497,7 @@ export default function Financeiro() {
     { mes: 'Jun', receita: 4200, custo: 2100 },
   ];
 
-  // Filtering list
+  // Filtering list with Date Range, Type, Status and Search
   const currentTypeFilter = activeTab === 1 ? 'RECEBER' : activeTab === 2 ? 'PAGAR' : undefined;
   const filteredRecords = records.filter(r => {
     if (currentTypeFilter && r.type !== currentTypeFilter) return false;
@@ -494,8 +508,22 @@ export default function Financeiro() {
 
     const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
 
-    return matchesSearch && matchesStatus;
+    // Date range filter against dueDate or entryDate
+    let matchesDate = true;
+    const itemDate = r.dueDate ? r.dueDate.split('T')[0] : '';
+    if (startDate && itemDate && itemDate < startDate) matchesDate = false;
+    if (endDate && itemDate && itemDate > endDate) matchesDate = false;
+
+    return matchesSearch && matchesStatus && matchesDate;
   });
+
+  // Dynamic calculations based on active date filter
+  const dynamicTotalRecebido = filteredRecords.filter(r => r.type === 'RECEBER' && r.status === 'PAGO').reduce((sum, r) => sum + r.amount, 0);
+  const dynamicTotalReceberPendente = filteredRecords.filter(r => r.type === 'RECEBER' && r.status !== 'PAGO').reduce((sum, r) => sum + r.amount, 0);
+  const dynamicTotalDespesaPaga = filteredRecords.filter(r => r.type === 'PAGAR' && r.status === 'PAGO').reduce((sum, r) => sum + r.amount, 0);
+  const dynamicTotalDespesaPendente = filteredRecords.filter(r => r.type === 'PAGAR' && r.status !== 'PAGO').reduce((sum, r) => sum + r.amount, 0);
+  const dynamicLucroLiquido = dynamicTotalRecebido - dynamicTotalDespesaPaga;
+
 
   return (
     <Box className="flex flex-col gap-6 w-full text-slate-100">
@@ -532,6 +560,76 @@ export default function Financeiro() {
         </Box>
       </Box>
 
+      {/* Date Filter Bar */}
+      <Paper
+        className="p-3 rounded-2xl flex flex-col md:flex-row gap-3 items-center justify-between"
+        sx={{ bgcolor: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}
+      >
+        <Box className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+          <Typography variant="caption" className="font-bold text-slate-400 uppercase tracking-wider text-[11px] mr-1">
+            Período:
+          </Typography>
+          {[
+            { id: 'MES_ATUAL', label: 'Este Mês' },
+            { id: '30_DIAS', label: 'Últimos 30 Dias' },
+            { id: 'HOJE', label: 'Hoje' },
+            { id: 'ANO_ATUAL', label: 'Este Ano' },
+            { id: 'TODOS', label: 'Todos' },
+          ].map(p => (
+            <Chip
+              key={p.id}
+              label={p.label}
+              size="small"
+              onClick={() => applyDatePreset(p.id as any)}
+              variant={datePreset === p.id ? 'filled' : 'outlined'}
+              sx={{
+                bgcolor: datePreset === p.id ? 'var(--color-primary-orange)' : 'transparent',
+                borderColor: 'var(--color-border)',
+                color: 'var(--color-text-main)',
+                fontWeight: 700,
+                fontSize: 11,
+                cursor: 'pointer',
+                '&:hover': { bgcolor: datePreset === p.id ? 'var(--color-primary-orange-hover)' : 'rgba(255,255,255,0.06)' },
+              }}
+            />
+          ))}
+        </Box>
+
+        <Box className="flex items-center gap-2 w-full md:w-auto justify-end">
+          <TextField
+            label="Data Inicial"
+            type="date"
+            size="small"
+            value={startDate}
+            onChange={e => {
+              setStartDate(e.target.value);
+              setDatePreset('CUSTOM');
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{
+              width: 145,
+              '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)', color: 'var(--color-text-main)', fontSize: 12 }
+            }}
+          />
+          <Typography variant="caption" className="text-slate-500">até</Typography>
+          <TextField
+            label="Data Final"
+            type="date"
+            size="small"
+            value={endDate}
+            onChange={e => {
+              setEndDate(e.target.value);
+              setDatePreset('CUSTOM');
+            }}
+            slotProps={{ inputLabel: { shrink: true } }}
+            sx={{
+              width: 145,
+              '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)', color: 'var(--color-text-main)', fontSize: 12 }
+            }}
+          />
+        </Box>
+      </Paper>
+
       {/* Tabs */}
       <Tabs
         value={activeTab}
@@ -544,8 +642,8 @@ export default function Financeiro() {
         }}
       >
         <Tab label="Dashboard Financeiro" />
-        <Tab label="Contas a Receber" />
-        <Tab label="Contas a Pagar" />
+        <Tab label={`Contas a Receber (${filteredRecords.filter(r => r.type === 'RECEBER').length})`} />
+        <Tab label={`Contas a Pagar (${filteredRecords.filter(r => r.type === 'PAGAR').length})`} />
         <Tab label="Leitor de Faturas (Gmail)" icon={<EmailIcon />} iconPosition="start" />
       </Tabs>
 
@@ -558,24 +656,25 @@ export default function Financeiro() {
           {/* TAB 0: DASHBOARD */}
           {activeTab === 0 && (
             <Box className="flex flex-col gap-6 animate-fadeIn">
-              {/* KPIs */}
-              <Grid container spacing={3}>
+              {/* Dynamic KPIs for selected period */}
+              <Grid container spacing={2.5}>
                 {[
-                  { label: 'MRR (Previsão do Mês)', value: `R$ ${summary.mrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'var(--color-primary-orange)', icon: <AccountBalanceWalletIcon /> },
-                  { label: 'Recebido no Mês', value: `R$ ${summary.totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'var(--color-success)', icon: <CheckCircleIcon /> },
-                  { label: 'Contas a Pagar (Mês)', value: `R$ ${summary.totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'var(--color-danger)', icon: <WarningAmberIcon /> },
-                  { label: 'Lucro Estimado (Mês)', value: `R$ ${summary.lucroEstimado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: '#34d399', icon: <AttachMoneyIcon /> },
+                  { label: 'Recebido no Período', value: `R$ ${dynamicTotalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'var(--color-success)', icon: <CheckCircleIcon /> },
+                  { label: 'A Receber (Pendente)', value: `R$ ${dynamicTotalReceberPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: '#38bdf8', icon: <AccountBalanceWalletIcon /> },
+                  { label: 'Despesas Pagas', value: `R$ ${dynamicTotalDespesaPaga.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'var(--color-danger)', icon: <WarningAmberIcon /> },
+                  { label: 'Despesas Pendentes', value: `R$ ${dynamicTotalDespesaPendente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: '#fb923c', icon: <AttachMoneyIcon /> },
+                  { label: 'Saldo Líquido Realizado', value: `R$ ${dynamicLucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: dynamicLucroLiquido >= 0 ? '#34d399' : '#f87171', icon: <AttachMoneyIcon /> },
                 ].map(({ label, value, color, icon }) => (
-                  <Grid key={label} size={{ xs: 12, sm: 6, md: 3 }}>
+                  <Grid key={label} size={{ xs: 12, sm: 6, md: 2.4 }}>
                     <Paper
-                      className="p-5 flex flex-col gap-2 rounded-2xl transition-all"
+                      className="p-4 flex flex-col gap-2 rounded-2xl transition-all"
                       sx={{ bgcolor: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}
                     >
                       <Box className="flex justify-between items-center text-slate-400">
                         <Typography variant="caption" className="font-semibold uppercase tracking-wider text-[10px]">{label}</Typography>
                         <Box sx={{ color }}>{icon}</Box>
                       </Box>
-                      <Typography variant="h5" className="font-black" sx={{ color }}>{value}</Typography>
+                      <Typography variant="h6" className="font-black" sx={{ color }}>{value}</Typography>
                     </Paper>
                   </Grid>
                 ))}
@@ -617,6 +716,103 @@ export default function Financeiro() {
                     <Area type="monotone" dataKey="custo" name="Despesas" stroke="var(--color-danger)" strokeWidth={2} fill="url(#gradCusto)" />
                   </AreaChart>
                 </ResponsiveContainer>
+              </Paper>
+
+              {/* Todos os Lançamentos do Período */}
+              <Paper className="p-4 rounded-2xl flex flex-col gap-3" sx={{ bgcolor: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
+                <Box className="flex justify-between items-center">
+                  <Typography variant="subtitle2" className="font-extrabold uppercase tracking-wider text-[11px] text-slate-400">
+                    Lançamentos do Período Selecionado ({filteredRecords.length})
+                  </Typography>
+                </Box>
+                <TableContainer>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ color: 'var(--color-text-muted)', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }}>Tipo</TableCell>
+                        <TableCell sx={{ color: 'var(--color-text-muted)', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }}>Descrição</TableCell>
+                        <TableCell sx={{ color: 'var(--color-text-muted)', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }}>Cliente / Fornecedor</TableCell>
+                        <TableCell sx={{ color: 'var(--color-text-muted)', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }}>Valor</TableCell>
+                        <TableCell sx={{ color: 'var(--color-text-muted)', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }}>Vencimento</TableCell>
+                        <TableCell sx={{ color: 'var(--color-text-muted)', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }}>Status</TableCell>
+                        <TableCell sx={{ color: 'var(--color-text-muted)', fontWeight: 700, borderBottom: '1px solid var(--color-border)' }} align="right">Ações</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {filteredRecords.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} align="center" className="text-slate-400 py-6">
+                            Nenhum lançamento no período selecionado. Use o botão acima para lançar Receita ou Despesa.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filteredRecords.slice(0, 10).map(r => {
+                          const isOverdue = new Date(r.dueDate) < new Date() && r.status !== 'PAGO';
+                          const displayStatus = isOverdue ? 'VENCIDO' : r.status;
+                          const isReceber = r.type === 'RECEBER';
+
+                          return (
+                            <TableRow key={r.id} sx={{ '&:hover': { bgcolor: 'rgba(255,255,255,0.02)' } }}>
+                              <TableCell sx={{ borderBottom: '1px solid var(--color-border)' }}>
+                                <Chip
+                                  label={isReceber ? 'RECEITA' : 'DESPESA'}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: isReceber ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                    color: isReceber ? 'var(--color-success)' : 'var(--color-danger)',
+                                    fontWeight: 700,
+                                    fontSize: 10,
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell className="font-medium" sx={{ color: 'var(--color-text-main)', borderBottom: '1px solid var(--color-border)' }}>
+                                {r.description}
+                              </TableCell>
+                              <TableCell sx={{ color: 'var(--color-text-muted)', borderBottom: '1px solid var(--color-border)' }}>
+                                {r.supplierOrClient || '—'}
+                              </TableCell>
+                              <TableCell className="font-extrabold" sx={{ color: isReceber ? 'var(--color-success)' : 'var(--color-danger)', borderBottom: '1px solid var(--color-border)' }}>
+                                {isReceber ? '+' : '-'} R$ {r.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell sx={{ color: 'var(--color-text-main)', borderBottom: '1px solid var(--color-border)' }}>
+                                {new Date(r.dueDate).toLocaleDateString('pt-BR')}
+                              </TableCell>
+                              <TableCell sx={{ borderBottom: '1px solid var(--color-border)' }}>
+                                <Chip
+                                  label={displayStatus}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: displayStatus === 'PAGO' ? 'rgba(16, 185, 129, 0.1)' : displayStatus === 'VENCIDO' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                                    color: displayStatus === 'PAGO' ? 'var(--color-success)' : displayStatus === 'VENCIDO' ? 'var(--color-danger)' : 'var(--color-warning)',
+                                    fontWeight: 700,
+                                    fontSize: 10
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell align="right" sx={{ borderBottom: '1px solid var(--color-border)' }}>
+                                <Box className="flex justify-end gap-1">
+                                  {r.status !== 'PAGO' && (
+                                    <MuiTooltip title={isReceber ? "Confirmar Recebimento" : "Dar Baixa (Pago)"}>
+                                      <IconButton size="small" className="text-emerald-500 hover:bg-emerald-500/10" onClick={() => handleMarkAsPaid(r)}>
+                                        <CheckCircleIcon fontSize="small" />
+                                      </IconButton>
+                                    </MuiTooltip>
+                                  )}
+                                  <IconButton size="small" className="text-blue-400 hover:bg-blue-400/10" onClick={() => handleOpenEditModal(r)}>
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                  <IconButton size="small" className="text-rose-500 hover:bg-rose-500/10" onClick={() => handleDeleteRecord(r.id)}>
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
               </Paper>
             </Box>
           )}
@@ -685,7 +881,7 @@ export default function Financeiro() {
                     {filteredRecords.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={6} align="center" className="text-slate-400 py-10">
-                          Nenhum lançamento financeiro cadastrado
+                          Nenhum lançamento encontrado para o período e filtros selecionados.
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -764,7 +960,7 @@ export default function Financeiro() {
               {/* Toolbar */}
               <Paper className="p-4 rounded-2xl flex flex-col md:flex-row gap-4 items-center justify-between" sx={{ bgcolor: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
                 <Box className="flex items-center gap-3 w-full md:w-auto">
-                  <FormControl size="small" className="min-w-[240px]">
+                  <FormControl size="small" className="min-w-[280px]">
                     <InputLabel id="gmail-select-label" sx={{ color: 'var(--color-text-muted)' }}>Selecionar Conta Gmail</InputLabel>
                     <Select
                       labelId="gmail-select-label"
@@ -782,7 +978,7 @@ export default function Financeiro() {
                       ) : (
                         gmailAccounts.map(acc => (
                           <MenuItem key={acc.id} value={acc.email}>
-                            {acc.name ? `${acc.name} (${acc.email})` : acc.email}
+                            📬 {acc.name ? `${acc.name} (${acc.email})` : acc.email}
                           </MenuItem>
                         ))
                       )}
@@ -794,6 +990,7 @@ export default function Financeiro() {
                       color="warning"
                       onClick={() => fetchEmails(selectedGmail)}
                       disabled={loadingEmails}
+                      title="Atualizar lista de e-mails desta conta"
                     >
                       <RefreshIcon className={loadingEmails ? "animate-spin" : ""} />
                     </IconButton>
@@ -819,7 +1016,7 @@ export default function Financeiro() {
                       onClick={() => setOpenMockModal(true)}
                       sx={{ bgcolor: 'var(--color-primary-orange)', '&:hover': { bgcolor: 'var(--color-primary-orange-hover)' }, fontWeight: 700 }}
                     >
-                      Adicionar Conta Simulação
+                      + Adicionar Conta Gmail
                     </Button>
                   ) : (
                     <Button
@@ -827,11 +1024,12 @@ export default function Financeiro() {
                       onClick={handleConnectGmail}
                       sx={{ bgcolor: 'var(--color-primary-orange)', '&:hover': { bgcolor: 'var(--color-primary-orange-hover)' }, fontWeight: 700 }}
                     >
-                      Conectar Conta Real
+                      + Conectar Outra Conta Google
                     </Button>
                   )}
                 </Box>
               </Paper>
+
 
               {/* Email List View */}
               {!selectedGmail ? (

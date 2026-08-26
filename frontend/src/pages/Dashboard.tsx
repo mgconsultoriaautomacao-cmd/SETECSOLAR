@@ -17,9 +17,9 @@ import BoltIcon from '@mui/icons-material/Bolt';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import SupportAgentIcon from '@mui/icons-material/SupportAgent';
 import SpeedIcon from '@mui/icons-material/Speed';
-import DevicesIcon from '@mui/icons-material/Devices';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import InboxIcon from '@mui/icons-material/Inbox';
+
 import WifiOffIcon from '@mui/icons-material/WifiOff';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 import TaskAltIcon from '@mui/icons-material/TaskAlt';
@@ -66,13 +66,18 @@ export default function Dashboard() {
       ]
     : [-14.235, -51.925];
 
-  // Contagens de status
+  // Contagens e Métricas de Geração (NOC Solar)
   const total = usinas.length;
   const normais   = usinas.filter(u => u.status === 'ONLINE').length;
   const alertas   = usinas.filter(u => u.status === 'ALERT').length;
   const criticos  = usinas.filter(u => u.status === 'CRITICAL').length;
   const offline   = usinas.filter(u => u.status === 'OFFLINE').length;
   const problemas = alertas + criticos + offline;
+
+  const totalKwp = usinas.reduce((acc, u) => acc + (u.capacityKwp || 0), 0);
+  const totalPowerNow = usinas.reduce((acc, u) => acc + (u.powerNow || 0), 0);
+  const totalGenToday = usinas.reduce((acc, u) => acc + (u.generationToday || 0), 0);
+  const totalGenAccum = usinas.reduce((acc, u) => acc + (u.generationTotal || 0), 0);
 
   const tabs: { name: StatusFilter; count: number; color: string }[] = [
     { name: 'Todos',        count: total,    color: 'orange' },
@@ -143,6 +148,9 @@ export default function Dashboard() {
                     <span style={{ fontSize: '12px', color: '#64748b' }}>👤 {u.client || 'Cliente N/A'}</span><br />
                     <span style={{ fontSize: '12px', color: '#64748b' }}>📍 {u.city ? `${u.city} - ${u.state}` : 'Localização não definida'}</span><br />
                     <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: 600 }}>⚡ {u.capacityKwp} kWp instalado</span><br />
+                    {u.generationToday !== null && u.generationToday !== undefined && (
+                      <span style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 600 }}>☀️ {u.generationToday.toFixed(1)} kWh hoje</span>
+                    )}<br />
                     <span style={{ fontSize: '11px', color: u.status === 'ONLINE' ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
                       Status: {statusLabel[u.status] || u.status}
                     </span>
@@ -163,12 +171,12 @@ export default function Dashboard() {
           {/* Usinas */}
           <div className="dash-card" onClick={() => navigate('/usinas')} style={{ cursor: 'pointer' }}>
             <div className="dash-card-header info">
-              <BoltIcon fontSize="small" /> Usinas cadastradas
+              <BoltIcon fontSize="small" /> Usinas & Potência
             </div>
             <div className="dash-card-content">
               <div className="dash-stat-block">
-                <span className="dash-stat-label">Total no sistema</span>
-                <span className="dash-stat-value">{total}</span>
+                <span className="dash-stat-label">Total / Instalado</span>
+                <span className="dash-stat-value">{total} <span style={{ fontSize: '12px', color: '#64748b' }}>({totalKwp.toFixed(1)} kWp)</span></span>
                 <span className="dash-stat-sub">
                   <TaskAltIcon fontSize="inherit" sx={{ color: '#10b981' }} /> {normais} online
                 </span>
@@ -180,6 +188,30 @@ export default function Dashboard() {
                 </span>
                 <span className="dash-stat-sub" style={{ color: 'var(--color-text-muted)' }}>
                   {alertas} alertas, {offline} offline
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Geração Hoje */}
+          <div className="dash-card">
+            <div className="dash-card-header" style={{ color: '#22c55e' }}>
+              <SpeedIcon fontSize="small" /> Geração Hoje (NOC)
+            </div>
+            <div className="dash-card-content">
+              <div className="dash-stat-block">
+                <span className="dash-stat-label">Produzido hoje</span>
+                <span className="dash-stat-value" style={{ color: '#22c55e' }}>
+                  {totalGenToday > 0 ? `${totalGenToday.toFixed(1)} kWh` : '—'}
+                </span>
+                <span className="dash-stat-sub" style={{ color: '#38bdf8' }}>
+                  ⚡ Potência agora: {totalPowerNow.toFixed(2)} kW
+                </span>
+              </div>
+              <div className="dash-stat-block">
+                <span className="dash-stat-label">Total Histórico</span>
+                <span className="dash-stat-value" style={{ fontSize: '15px' }}>
+                  {totalGenAccum > 1000 ? `${(totalGenAccum / 1000).toFixed(2)} MWh` : `${totalGenAccum.toFixed(0)} kWh`}
                 </span>
               </div>
             </div>
@@ -205,7 +237,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Tickets */}
+          {/* Chamados */}
           <div className="dash-card" onClick={() => navigate('/chamados')} style={{ cursor: 'pointer' }}>
             <div className="dash-card-header warning">
               <SupportAgentIcon fontSize="small" /> Chamados
@@ -221,41 +253,6 @@ export default function Dashboard() {
               <div className="dash-stat-block">
                 <span className="dash-stat-label">Resolvidos hoje</span>
                 <span className="dash-stat-value" style={{ color: 'var(--color-success)' }}>0</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Desempenho */}
-          <div className="dash-card">
-            <div className="dash-card-header info">
-              <SpeedIcon fontSize="small" /> Desempenho
-            </div>
-            <div className="dash-card-content">
-              <div className="dash-stat-block">
-                <span className="dash-stat-label">Precisam atenção</span>
-                <span className="dash-stat-value" style={{ color: problemas > 0 ? 'var(--color-warning)' : 'var(--color-success)' }}>
-                  {problemas}
-                </span>
-                <span className="dash-stat-sub" style={{ color: 'var(--color-primary-orange)', cursor: 'pointer' }}>
-                  {problemas > 0 ? 'Ver usinas...' : 'Tudo em dia ✓'}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Acessos */}
-          <div className="dash-card">
-            <div className="dash-card-header">
-              <DevicesIcon fontSize="small" /> Acessos
-            </div>
-            <div className="dash-card-content">
-              <div className="dash-stat-block">
-                <span className="dash-stat-label">Clientes — últimos 30 dias</span>
-                <span className="dash-stat-value">
-                  0 <span style={{ fontSize: '12px', fontWeight: 'normal', color: 'var(--color-text-muted)' }}>
-                    de {clients.length}
-                  </span>
-                </span>
               </div>
             </div>
           </div>
@@ -315,9 +312,11 @@ export default function Dashboard() {
                     <th>Usina</th>
                     <th>Cliente</th>
                     <th>Cidade / UF</th>
-                    <th>Responsável</th>
+                    <th>Fornecedor / Plataforma</th>
                     <th>kWp</th>
-                    <th>Datalogger</th>
+                    <th>Potência Agora</th>
+                    <th>Geração Hoje</th>
+                    <th>Geração Total</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -329,15 +328,35 @@ export default function Dashboard() {
                       onClick={() => navigate('/usinas')}
                       style={{ cursor: 'pointer' }}
                     >
-                      <td style={{ color: 'var(--color-text-main)', fontWeight: 500 }}>{u.name}</td>
+                      <td style={{ color: 'var(--color-text-main)', fontWeight: 600 }}>{u.name}</td>
                       <td style={{ color: 'var(--color-text-muted)' }}>{u.client || '—'}</td>
                       <td style={{ color: 'var(--color-text-muted)' }}>
                         {u.city ? `${u.city} - ${u.state}` : '—'}
                       </td>
-                      <td style={{ color: 'var(--color-text-muted)' }}>—</td>
-                      <td style={{ color: 'var(--color-text-muted)' }}>{u.capacityKwp}</td>
-                      <td style={{ color: 'var(--color-text-muted)', fontFamily: 'monospace', fontSize: '12px' }}>
-                        {u.datalogger || '—'}
+                      <td>
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: 700,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          background: u.manufacturer?.toLowerCase().includes('solis') ? '#854d0e20' : u.manufacturer?.toLowerCase().includes('growatt') ? '#15803d20' : '#1e293b',
+                          color: u.manufacturer?.toLowerCase().includes('solis') ? '#eab308' : u.manufacturer?.toLowerCase().includes('growatt') ? '#22c55e' : '#94a3b8',
+                          border: '1px solid rgba(255,255,255,0.08)'
+                        }}>
+                          {u.manufacturer || u.dataloggerSupplier?.name || 'Local'}
+                        </span>
+                      </td>
+                      <td style={{ color: 'var(--color-text-muted)', fontWeight: 600 }}>{u.capacityKwp} kWp</td>
+                      <td style={{ color: u.powerNow && u.powerNow > 0 ? '#38bdf8' : 'var(--color-text-muted)', fontWeight: 600 }}>
+                        {u.powerNow !== null && u.powerNow !== undefined ? `${u.powerNow.toFixed(2)} kW` : '—'}
+                      </td>
+                      <td style={{ color: u.generationToday && u.generationToday > 0 ? '#22c55e' : 'var(--color-text-muted)', fontWeight: 700 }}>
+                        {u.generationToday !== null && u.generationToday !== undefined ? `${u.generationToday.toFixed(1)} kWh` : '—'}
+                      </td>
+                      <td style={{ color: 'var(--color-text-muted)', fontSize: '12px' }}>
+                        {u.generationTotal !== null && u.generationTotal !== undefined
+                          ? u.generationTotal > 1000 ? `${(u.generationTotal / 1000).toFixed(2)} MWh` : `${u.generationTotal.toFixed(0)} kWh`
+                          : '—'}
                       </td>
                       <td>
                         <span className={`dash-status-badge ${u.status?.toLowerCase()}`}>
@@ -350,6 +369,7 @@ export default function Dashboard() {
                 </tbody>
               </table>
             ) : (
+
               <div className="dash-empty-state">
                 <InboxIcon className="dash-empty-icon" />
                 <span>

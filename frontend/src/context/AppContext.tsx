@@ -41,7 +41,15 @@ export interface Usina {
   installationDate?: string;
   approvalDate?: string;
   dataloggerSupplierId?: string;
+
+  dataloggerSupplier?: DataloggerSupplier;
+  powerNow?: number | null;
+  generationToday?: number | null;
+  generationTotal?: number | null;
+  temperature?: number | null;
+  readingLastUpdate?: string | null;
 }
+
 
 export interface DataloggerSupplier {
   id: string;
