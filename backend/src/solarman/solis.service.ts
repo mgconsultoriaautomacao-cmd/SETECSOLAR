@@ -5,10 +5,14 @@ import * as crypto from 'crypto';
 export interface SolisReading {
   powerNow: number | null;        // kW
   generationToday: number | null; // kWh
+  generationMonth: number | null; // kWh
   generationTotal: number | null; // kWh
+  incomeToday: number | null;     // BRL
+  incomeMonth: number | null;     // BRL
   temperature: number | null;     // °C
   status: 'ONLINE' | 'OFFLINE' | 'FAULT';
 }
+
 
 export interface SolisPlant {
   stationId: string;
@@ -145,19 +149,32 @@ export class SolisService {
       // 1. Tenta pegar detalhe direto do inversor
       const detail = await this.makeRequest('/v1/api/inverterDetail', { sn: deviceSn }, keyId, keySecret);
       if (detail) {
-        const pac = parseFloat(detail.pac ?? detail.power ?? '0');
-        const etoday = parseFloat(detail.etoday ?? detail.dayEnergy ?? '0');
-        const etotalRaw = parseFloat(detail.etotal ?? detail.totalEnergy ?? '0');
-        // Se etotalStr for MWh, converte para kWh
-        const etotal = detail.etotalStr === 'MWh' ? etotalRaw * 1000 : etotalRaw;
+        const pac = parseFloat(detail.pac ?? detail.pvAndAcCoupledPower ?? detail.power ?? detail.psumCal ?? '0');
+        // Solis API: eToday (kWh), eMonth (kWh), eTotal (MWh ou kWh), allEnergyOriginal (kWh)
+        const etoday = parseFloat(detail.eToday ?? detail.etoday ?? detail.dayEnergy ?? '0');
+        const emonth = parseFloat(detail.eMonth ?? detail.emonth ?? detail.monthEnergy ?? '0');
+        
+        let etotal = 0;
+        if (detail.allEnergyOriginal !== undefined && detail.allEnergyOriginal !== null) {
+          etotal = parseFloat(detail.allEnergyOriginal);
+        } else {
+          const rawTotal = parseFloat(detail.eTotal ?? detail.etotal ?? detail.totalEnergy ?? '0');
+          etotal = (detail.eTotalStr === 'MWh' || detail.etotalStr === 'MWh') && rawTotal < 1000 ? rawTotal * 1000 : rawTotal;
+        }
+
+        const dayIncome = parseFloat(detail.dayInCome ?? detail.dayIncome ?? '0');
+        const monthIncome = parseFloat(detail.monthInCome ?? detail.monthIncome ?? '0');
         const temp = parseFloat(detail.inverterTemperature ?? detail.temperature ?? '0');
 
         return {
-          powerNow: isNaN(pac) ? null : pac,
-          generationToday: isNaN(etoday) ? null : etoday,
-          generationTotal: isNaN(etotal) ? null : etotal,
+          powerNow: isNaN(pac) ? 0 : pac,
+          generationToday: isNaN(etoday) ? 0 : etoday,
+          generationMonth: isNaN(emonth) ? 0 : emonth,
+          generationTotal: isNaN(etotal) ? 0 : etotal,
+          incomeToday: isNaN(dayIncome) ? 0 : dayIncome,
+          incomeMonth: isNaN(monthIncome) ? 0 : monthIncome,
           temperature: isNaN(temp) || temp <= 0 ? null : temp,
-          status: pac > 0.01 ? 'ONLINE' : 'OFFLINE',
+          status: (detail.faultCodeDesc === 'Generating' || pac > 0 || etoday > 0) ? 'ONLINE' : 'OFFLINE',
         };
       }
 
@@ -167,22 +184,27 @@ export class SolisService {
         const inv = invList.page.records.find((r: any) => (r.sn === deviceSn || r.inverterSn === deviceSn));
         if (inv) {
           const pac = parseFloat(inv.pac ?? inv.power ?? '0');
-          const etoday = parseFloat(inv.etoday ?? inv.dayEnergy ?? '0');
-          const etotalRaw = parseFloat(inv.etotal ?? inv.totalEnergy ?? '0');
-          const etotal = inv.etotalStr === 'MWh' ? etotalRaw * 1000 : etotalRaw;
+          const etoday = parseFloat(inv.eToday ?? inv.etoday ?? inv.dayEnergy ?? '0');
+          const emonth = parseFloat(inv.eMonth ?? inv.emonth ?? inv.monthEnergy ?? '0');
+          const rawTotal = parseFloat(inv.allEnergyOriginal ?? inv.eTotal ?? inv.etotal ?? inv.totalEnergy ?? '0');
+          const etotal = (inv.eTotalStr === 'MWh' || inv.etotalStr === 'MWh') && rawTotal < 1000 ? rawTotal * 1000 : rawTotal;
 
           return {
-            powerNow: isNaN(pac) ? null : pac,
-            generationToday: isNaN(etoday) ? null : etoday,
-            generationTotal: isNaN(etotal) ? null : etotal,
+            powerNow: isNaN(pac) ? 0 : pac,
+            generationToday: isNaN(etoday) ? 0 : etoday,
+            generationMonth: isNaN(emonth) ? 0 : emonth,
+            generationTotal: isNaN(etotal) ? 0 : etotal,
+            incomeToday: null,
+            incomeMonth: null,
             temperature: null,
-            status: pac > 0.01 ? 'ONLINE' : 'OFFLINE',
+            status: (pac > 0 || etoday > 0) ? 'ONLINE' : 'OFFLINE',
           };
         }
       }
     } catch (err: any) {
       this.logger.error(`Erro ao ler inversor Solis ${deviceSn}: ${err.message}`);
     }
+
 
     return null;
   }

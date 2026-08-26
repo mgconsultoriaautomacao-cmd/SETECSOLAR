@@ -161,6 +161,7 @@ export class SolarmanController {
   // ─── SolisCloud: Descoberta e Sincronização Inicial (21/08/2026) Busca plantas da Solis// ──────────────────────────────
 
   
+  
   @Get('solis/plants')
   async getSolisPlants(@Query('supplierId') supplierId?: string) {
     return this.solarmanService.discoverSolisPlants(supplierId);

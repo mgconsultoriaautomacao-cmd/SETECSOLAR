@@ -4,10 +4,11 @@ import axios from 'axios';
 
 @Injectable()
 export class GmailService {
-  private readonly clientId = process.env.GOOGLE_CLIENT_ID;
-  private readonly clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  private readonly clientId = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID;
+  private readonly clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET;
   private readonly redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/gmail/callback';
   private readonly frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
 
   constructor(private readonly prisma: PrismaService) {}
 
