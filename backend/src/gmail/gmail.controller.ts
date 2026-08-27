@@ -15,7 +15,7 @@ export class GmailController {
 
   @Get('callback')
   async callback(@Query('code') code: string, @Res() res: any) {
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const frontendUrl = process.env.FRONTEND_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:5173');
     try {
       if (code) {
         await this.gmailService.handleCallback(code);

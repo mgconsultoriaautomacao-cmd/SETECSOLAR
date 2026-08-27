@@ -6,8 +6,25 @@ import axios from 'axios';
 export class GmailService {
   private readonly clientId = process.env.GOOGLE_CLIENT_ID || process.env.GMAIL_CLIENT_ID;
   private readonly clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.GMAIL_CLIENT_SECRET;
-  private readonly redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/api/gmail/callback';
-  private readonly frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  private get redirectUri(): string {
+    if (process.env.GOOGLE_REDIRECT_URI) {
+      return process.env.GOOGLE_REDIRECT_URI;
+    }
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}/api/gmail/callback`;
+    }
+    return 'http://localhost:3001/api/gmail/callback';
+  }
+
+  private get frontendUrl(): string {
+    if (process.env.FRONTEND_URL) {
+      return process.env.FRONTEND_URL;
+    }
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}`;
+    }
+    return 'http://localhost:5173';
+  }
 
 
   constructor(private readonly prisma: PrismaService) {}

@@ -4,7 +4,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   InputAdornment, Tabs, Tab, MenuItem, Select,
-  FormControl, InputLabel, CircularProgress, IconButton, Alert, Tooltip as MuiTooltip
+  FormControl, InputLabel, IconButton, Alert, Tooltip as MuiTooltip
 } from '@mui/material';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
@@ -23,6 +23,7 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 import { useApp } from '../context/AppContext';
+import { SolarLoader } from '../components/SolarLoader';
 
 interface FinancialRecord {
   id: string;
@@ -648,9 +649,10 @@ export default function Financeiro() {
       </Tabs>
 
       {loading ? (
-        <Box className="flex justify-center items-center py-20">
-          <CircularProgress color="warning" />
-        </Box>
+        <SolarLoader
+          title="Carregando Módulo Financeiro..."
+          subtitle="Consolidando boletos de energia, faturas de usinas e receitas operacionais."
+        />
       ) : (
         <>
           {/* TAB 0: DASHBOARD */}
@@ -1043,9 +1045,10 @@ export default function Financeiro() {
                   </Typography>
                 </Paper>
               ) : loadingEmails ? (
-                <Box className="flex justify-center items-center py-20">
-                  <CircularProgress color="warning" />
-                </Box>
+                <SolarLoader
+                  title="Capturando Faturas & Contas de Energia..."
+                  subtitle={`Conectando ao Gmail para buscar boletos e notificações na conta ${selectedGmail}...`}
+                />
               ) : emails.length === 0 ? (
                 <Paper className="p-12 text-center rounded-2xl" sx={{ bgcolor: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>
                   <Typography className="text-slate-400">Nenhum e-mail de fatura de energia localizado nesta caixa postal.</Typography>

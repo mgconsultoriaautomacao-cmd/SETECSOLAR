@@ -40,6 +40,7 @@ import SyncIcon from '@mui/icons-material/Sync';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { useApp, type Usina } from '../context/AppContext';
+import { SolarLoader } from '../components/SolarLoader';
 
 const API_URL =
   import.meta.env.VITE_API_URL ||
@@ -452,6 +453,13 @@ export default function Usinas() {
 
   return (
     <Box className="space-y-6">
+      {syncLoading && (
+        <SolarLoader
+          fullScreen
+          title={`Sincronizando ${syncProvider === 'ALL' ? 'Todas as Usinas Solares' : `Fornecedor ${syncProvider}`}`}
+          subtitle="Conectando às APIs Cloud (Growatt, Solis, Solplanet, Solarman) e processando telemetria em tempo real..."
+        />
+      )}
       <Box className="flex justify-between items-center">
         <Typography variant="h5" className="font-bold text-slate-100">
           Gestão de Usinas
