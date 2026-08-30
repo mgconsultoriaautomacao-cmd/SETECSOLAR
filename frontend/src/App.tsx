@@ -352,28 +352,97 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
     return Math.sin(((hour - 5.62) / dayLength) * Math.PI);
   };
 
-  const getUsinaRenderData = (u: any) => {
-    if (u.id.startsWith('mock-')) return u;
+  // Live Telemetry Readings from Dataloggers / Backend API
+  const [telemetryReadings, setTelemetryReadings] = useState<Record<string, any>>({});
 
-    const sun = getSunIntensity();
-    let status = u.status || 'ONLINE';
+  useEffect(() => {
+    const fetchLiveReadings = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3001/api' : '/api');
+        const res = await fetch(`${API_URL}/solarman/readings`, {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
+            'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const map: Record<string, any> = {};
+          if (Array.isArray(data)) {
+            data.forEach((r: any) => {
+              if (r.usinaId) map[r.usinaId] = r;
+            });
+          }
+          setTelemetryReadings(map);
+        }
+      } catch (err) {
+        console.error('Failed to fetch live solar readings:', err);
+      }
+    };
+
+    fetchLiveReadings();
+    const interval = setInterval(fetchLiveReadings, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getUsinaRenderData = (u: any) => {
+    // Check if live telemetry reading exists for this usina
+    const live = telemetryReadings[u.id];
+    
+    const powerNow = live?.powerNow !== undefined && live?.powerNow !== null ? live.powerNow : u.powerNow;
+    const generationToday = live?.generationToday !== undefined && live?.generationToday !== null ? live.generationToday : u.generationToday;
+    const generationTotal = live?.generationTotal !== undefined && live?.generationTotal !== null ? live.generationTotal : u.generationTotal;
+    const status = live?.status ? (live.status === 'FAULT' ? 'ALERT' : live.status) : (u.status || 'ONLINE');
+    const readingLastUpdate = live?.lastUpdate || u.readingLastUpdate || null;
+    const temperature = live?.temperature || u.temperature || null;
+
+    const hasRealPower = powerNow !== undefined && powerNow !== null;
+    const hasRealToday = generationToday !== undefined && generationToday !== null;
+    const hasRealTotal = generationTotal !== undefined && generationTotal !== null;
+
+    const cap = u.capacityKwp || 5;
+
     let powerVal = 0;
     let powerUnit = 'W';
     let pct = 0;
+    let genKw = 0;
 
-    const cap = u.capacityKwp || 5;
-    if (status === 'ONLINE') {
-      const genKw = cap * sun * 0.85; // 85% typical efficiency
-      if (genKw < 1) {
-        powerVal = Math.round(genKw * 1000);
-        powerUnit = 'W';
+    if (hasRealPower) {
+      const rawPower = Number(powerNow);
+      if (rawPower >= 100) {
+        genKw = rawPower / 1000;
+        if (genKw < 1) {
+          powerVal = Math.round(rawPower);
+          powerUnit = 'W';
+        } else {
+          powerVal = Number(genKw.toFixed(2));
+          powerUnit = 'kW';
+        }
+      } else if (rawPower > 0) {
+        genKw = rawPower;
+        if (genKw < 1) {
+          powerVal = Math.round(genKw * 1000);
+          powerUnit = 'W';
+        } else {
+          powerVal = Number(genKw.toFixed(2));
+          powerUnit = 'kW';
+        }
       } else {
-        powerVal = Number(genKw.toFixed(2));
-        powerUnit = 'kW';
+        powerVal = 0;
+        powerUnit = 'W';
+        genKw = 0;
       }
-      pct = Math.max(0, Math.round((genKw / cap) * 100));
-    } else if (status === 'ALERT') {
-      const genKw = cap * sun * 0.15; // Degraded 15% efficiency
+      pct = Math.min(100, Math.max(0, Math.round((genKw / cap) * 100)));
+    } else {
+      const sun = getSunIntensity();
+      if (status === 'ONLINE') {
+        genKw = cap * sun * 0.85;
+      } else if (status === 'ALERT') {
+        genKw = cap * sun * 0.15;
+      } else {
+        genKw = 0;
+      }
       if (genKw < 1) {
         powerVal = Math.round(genKw * 1000);
         powerUnit = 'W';
@@ -384,11 +453,22 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
       pct = Math.max(0, Math.round((genKw / cap) * 100));
     }
 
-    // Today's generation E-Hoje
-    const eHojeVal = (cap * sun * 4.3).toFixed(2);
-    // Total generation
-    const eTotalVal = (cap * 11.2) + (u.estimatedKwh || 600) * 0.45;
-    const eTotalStr = eTotalVal > 1000 ? `${(eTotalVal / 1000).toFixed(2)} MWh` : `${eTotalVal.toFixed(2)} kWh`;
+    let eHojeVal = '0.00';
+    if (hasRealToday) {
+      eHojeVal = Number(generationToday).toFixed(2);
+    } else {
+      const sun = getSunIntensity();
+      eHojeVal = (cap * sun * 4.3).toFixed(2);
+    }
+
+    let eTotalStr = '0.00 kWh';
+    if (hasRealTotal) {
+      const tot = Number(generationTotal);
+      eTotalStr = tot >= 1000 ? `${(tot / 1000).toFixed(2)} MWh` : `${tot.toFixed(2)} kWh`;
+    } else {
+      const eTotalVal = (cap * 11.2) + (u.estimatedKwh || 600) * 0.45;
+      eTotalStr = eTotalVal > 1000 ? `${(eTotalVal / 1000).toFixed(2)} MWh` : `${eTotalVal.toFixed(2)} kWh`;
+    }
 
     return {
       id: u.id,
@@ -407,7 +487,11 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
       eTotal: eTotalStr,
       powerVal: powerVal,
       powerUnit: powerUnit,
-      pct: pct
+      pct: pct,
+      powerNowKw: genKw,
+      readingLastUpdate: readingLastUpdate,
+      temperature: temperature,
+      isRealData: hasRealPower || hasRealToday || hasRealTotal
     };
   };
 
@@ -2060,6 +2144,24 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       size="small"
                       className="font-bold text-[10px]"
                     />
+                  </div>
+
+                  {/* Real Telemetry Status Badge */}
+                  <div className={`px-3 py-1.5 rounded-xl border flex items-center justify-between text-[10px] ${
+                    selectedUsinaData.isRealData 
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold'
+                      : 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold'
+                  }`}>
+                    <span>
+                      {selectedUsinaData.isRealData ? '⚡ Telemetria Real em Tempo Real (Inversor)' : '☀️ Telemetria Estimada & Datalogger Cloud'}
+                    </span>
+                    {selectedUsinaData.readingLastUpdate ? (
+                      <span className="font-mono opacity-80">
+                        Atualizado às {new Date(selectedUsinaData.readingLastUpdate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    ) : (
+                      <span className="font-mono opacity-80">Conectado ao NOC</span>
+                    )}
                   </div>
 
                   {/* Generation Telemetry Cards Grid */}
