@@ -161,10 +161,10 @@ const mockUsinasDefault = [
 function AppCliente() {
   const navigate = useNavigate();
   const { clients, usinas, addUsina, addTicket } = useApp();
-  
+
   const clientEmail = localStorage.getItem('user_email') || 'cliente@usinasolar.com';
   const isCliente = localStorage.getItem('user_role') === 'CLIENTE';
-  
+
   // Selected client state (allows switching between clients in simulation or auto-bound to logged user)
   const [selectedClientId, setSelectedClientId] = useState<string>('');
 
@@ -179,7 +179,7 @@ function AppCliente() {
 
   // Find current client object
   const clientObj = clients.find(c => c.id === selectedClientId) || clients.find(c => c.email.toLowerCase() === clientEmail.toLowerCase()) || clients[0];
-  
+
   // Filter usinas for this client
   const clientUsinas = usinas.filter(u => u.clientId === clientObj?.id);
 
@@ -191,7 +191,7 @@ function AppCliente() {
   const [simulatorTheme, setSimulatorTheme] = useState<'light' | 'dark'>('light');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ONLINE' | 'ALERT' | 'OFFLINE'>('ALL');
-  
+
   // Time and Battery Simulation
   const [currentTime, setCurrentTime] = useState('15:23');
   const [batteryLevel] = useState(88);
@@ -199,7 +199,7 @@ function AppCliente() {
   // Modal / Bottom Sheet States
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [activeModal, setActiveModal] = useState<null | 'add_plant' | 'scan_qr' | 'product_details' | 'quick_install' | 'warranty' | 'unit_groups' | 'user_manual' | 'contact_us' | 'org_mgmt' | 'account_sec' | 'notifications' | 'app_feedback' | 'data_mig' | 'about_us' | 'languages' | 'privacy' | 'usina_details'>(null);
-  
+
   // Toast state
   const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'info' | 'error' } | null>(null);
 
@@ -389,7 +389,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
   const getUsinaRenderData = (u: any) => {
     // Check if live telemetry reading exists for this usina
     const live = telemetryReadings[u.id];
-    
+
     const powerNow = live?.powerNow !== undefined && live?.powerNow !== null ? live.powerNow : u.powerNow;
     const generationToday = live?.generationToday !== undefined && live?.generationToday !== null ? live.generationToday : u.generationToday;
     const generationTotal = live?.generationTotal !== undefined && live?.generationTotal !== null ? live.generationTotal : u.generationTotal;
@@ -504,8 +504,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
   // Filter usinas
   const filteredUsinas = allUsinas.map(getUsinaRenderData).filter(u => {
-    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          u.city.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.city.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = activeFilter === 'ALL' || u.status === activeFilter;
     return matchesSearch && matchesStatus;
   });
@@ -521,7 +521,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
     const R = 60; // radius
     const X_c = 90; // center x
     const Y_c = 80; // center y
-    
+
     // Angle goes from PI (180deg - left/sunrise) to 0 (0deg - right/sunset)
     const angle = Math.PI - progress * Math.PI;
     const x = X_c + R * Math.cos(angle);
@@ -571,7 +571,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
       setNewPlantCity('');
       setNewPlantState('');
       setNewPlantDatalogger('');
-      
+
       setActiveModal(null);
       triggerToast('Usina cadastrada com sucesso!', 'success');
     } catch (err) {
@@ -674,7 +674,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
   return (
     <Box className="min-h-screen bg-slate-950 flex items-center justify-center p-0 md:p-6 text-slate-100 font-sans">
-      
+
       {/* Global SVG gradients definition */}
       <svg style={{ position: 'absolute', width: 0, height: 0 }} aria-hidden="true">
         <defs>
@@ -711,12 +711,11 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
       `}</style>
 
       {/* Phone Viewport Simulator Container */}
-      <Paper className={`w-full max-w-md min-h-screen md:min-h-[860px] md:max-h-[890px] ${
-        simulatorTheme === 'light' 
-          ? 'bg-gradient-to-tr from-violet-100/40 via-white to-pink-100/30 text-slate-800' 
+      <Paper className={`w-full max-w-md min-h-screen md:min-h-[860px] md:max-h-[890px] ${simulatorTheme === 'light'
+          ? 'bg-gradient-to-tr from-violet-100/40 via-white to-pink-100/30 text-slate-800'
           : 'bg-slate-950 text-slate-100'
-      } border-0 md:border-[8px] md:border-slate-900 shadow-2xl overflow-hidden flex flex-col justify-between md:rounded-[40px] relative transition-all duration-300`}>
-        
+        } border-0 md:border-[8px] md:border-slate-900 shadow-2xl overflow-hidden flex flex-col justify-between md:rounded-[40px] relative transition-all duration-300`}>
+
         {/* Mobile top Notch / Dynamic Island */}
         <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-950 rounded-full z-50 flex items-center justify-between px-3 hidden md:flex">
           <div className="w-2.5 h-2.5 bg-slate-900 rounded-full border border-slate-850"></div>
@@ -724,9 +723,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
         </div>
 
         {/* Dynamic Mobile Status Bar */}
-        <div className={`px-5 pt-3 pb-2 flex justify-between items-center text-xs font-semibold select-none ${
-          simulatorTheme === 'light' ? 'bg-white/40 backdrop-blur-md' : 'bg-slate-950/40 backdrop-blur-md'
-        } z-30`}>
+        <div className={`px-5 pt-3 pb-2 flex justify-between items-center text-xs font-semibold select-none ${simulatorTheme === 'light' ? 'bg-white/40 backdrop-blur-md' : 'bg-slate-950/40 backdrop-blur-md'
+          } z-30`}>
           <div>{currentTime}</div>
           <div className="flex items-center gap-1.5">
             <SignalCellularIcon style={{ fontSize: 13 }} />
@@ -739,34 +737,32 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
         </div>
 
         {/* Simulator App Header */}
-        <div className={`px-4 py-3 flex justify-between items-center border-b ${
-          simulatorTheme === 'light' ? 'bg-white/90 border-slate-100/80' : 'bg-slate-900/90 border-slate-800/80'
-        } sticky top-0 z-20 backdrop-blur-md transition-colors`}>
+        <div className={`px-4 py-3 flex justify-between items-center border-b ${simulatorTheme === 'light' ? 'bg-white/90 border-slate-100/80' : 'bg-slate-900/90 border-slate-800/80'
+          } sticky top-0 z-20 backdrop-blur-md transition-colors`}>
           <div className="flex items-center gap-2">
-            <img 
-              src={logoSetec} 
-              alt="SETEC" 
-              className={`h-7 w-auto ${
-                simulatorTheme === 'light' ? 'mix-blend-multiply invert' : 'mix-blend-screen'
-              }`} 
+            <img
+              src={logoSetec}
+              alt="SETEC"
+              className={`h-7 w-auto ${simulatorTheme === 'light' ? 'mix-blend-multiply invert' : 'mix-blend-screen'
+                }`}
             />
             <span className="font-extrabold text-orange-500 tracking-wider text-sm">SETEC CLIENTE</span>
           </div>
 
           <div className="flex items-center gap-1.5">
             {/* Theme Toggle inside Phone Simulator */}
-            <IconButton 
-              onClick={() => setSimulatorTheme(prev => prev === 'light' ? 'dark' : 'light')} 
-              size="small" 
+            <IconButton
+              onClick={() => setSimulatorTheme(prev => prev === 'light' ? 'dark' : 'light')}
+              size="small"
               className={`p-1 ${simulatorTheme === 'light' ? 'bg-slate-100 hover:bg-slate-200 text-slate-800' : 'bg-slate-800 hover:bg-slate-700 text-slate-200'}`}
             >
               {simulatorTheme === 'light' ? <DarkModeIcon fontSize="small" /> : <LightModeIcon fontSize="small" />}
             </IconButton>
 
             {/* Logout shortcut */}
-            <IconButton 
-              onClick={() => navigate('/login')} 
-              size="small" 
+            <IconButton
+              onClick={() => navigate('/login')}
+              size="small"
               className="p-1 bg-rose-500/10 text-rose-500 border border-rose-500/20 hover:bg-rose-500/20"
             >
               <ExitToAppIcon fontSize="small" />
@@ -775,9 +771,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
         </div>
 
         {/* Client Account Selector Bar */}
-        <div className={`px-4 py-2 border-b flex items-center justify-between text-xs ${
-          simulatorTheme === 'light' ? 'bg-orange-500/5 border-orange-200/50 text-slate-700' : 'bg-orange-500/10 border-orange-500/20 text-slate-300'
-        }`}>
+        <div className={`px-4 py-2 border-b flex items-center justify-between text-xs ${simulatorTheme === 'light' ? 'bg-orange-500/5 border-orange-200/50 text-slate-700' : 'bg-orange-500/10 border-orange-500/20 text-slate-300'
+          }`}>
           <div className="flex items-center gap-1.5 font-bold truncate">
             <PersonIcon className="text-orange-500" style={{ fontSize: 16 }} />
             <span className="truncate">{clientObj?.name || 'Cliente'}</span>
@@ -793,9 +788,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                   triggerToast(`Perfil alterado: ${found.name}`, 'info');
                 }
               }}
-              className={`text-[11px] font-bold rounded-lg px-2 py-1 outline-none border cursor-pointer ${
-                simulatorTheme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-200'
-              }`}
+              className={`text-[11px] font-bold rounded-lg px-2 py-1 outline-none border cursor-pointer ${simulatorTheme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-200'
+                }`}
             >
               {clients.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -806,17 +800,16 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
         {/* Dynamic Simulator Screen Content */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-20 relative">
-          
+
           {/* TAB 1: PLANTAS */}
           {activeTab === 'plantas' && (
             <div className="space-y-4">
-              
+
               {/* Weather and Solar Arc Header */}
-              <div className={`p-4 rounded-3xl border flex flex-col relative overflow-hidden transition-all ${
-                simulatorTheme === 'light' 
-                  ? 'bg-white/80 border-slate-100 shadow-sm shadow-slate-100/50' 
+              <div className={`p-4 rounded-3xl border flex flex-col relative overflow-hidden transition-all ${simulatorTheme === 'light'
+                  ? 'bg-white/80 border-slate-100 shadow-sm shadow-slate-100/50'
                   : 'bg-slate-900/60 border-slate-800/80 shadow-md'
-              }`}>
+                }`}>
                 {/* Weather main line */}
                 <div className="flex justify-between items-start mb-2 relative z-10">
                   <div className="flex items-center gap-2">
@@ -854,15 +847,15 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 <div className="relative w-full h-[95px] flex items-end justify-center overflow-hidden">
                   <svg className="w-[180px] h-[90px]" viewBox="0 0 180 90">
                     {/* Elliptical dashed path representing sun path */}
-                    <path 
-                      d="M 20,80 A 70,70 0 0,1 160,80" 
-                      fill="none" 
-                      stroke="url(#weatherArcGradient)" 
-                      strokeWidth="2.5" 
-                      strokeDasharray="4 3" 
-                      opacity="0.8" 
+                    <path
+                      d="M 20,80 A 70,70 0 0,1 160,80"
+                      fill="none"
+                      stroke="url(#weatherArcGradient)"
+                      strokeWidth="2.5"
+                      strokeDasharray="4 3"
+                      opacity="0.8"
                     />
-                    
+
                     {/* Horizon line */}
                     <line x1="10" y1="80" x2="170" y2="80" stroke={simulatorTheme === 'light' ? '#e2e8f0' : '#334155'} strokeWidth="1" />
 
@@ -877,7 +870,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       <circle cx="90" cy="40" r="6" fill="#94a3b8" />
                     )}
                   </svg>
-                  
+
                   {/* Arc values and center label */}
                   <div className="absolute bottom-1 w-full text-center">
                     <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400">
@@ -889,11 +882,10 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
               {/* Interactive Search Bar & Filter */}
               <div className="flex gap-2">
-                <div className={`flex-1 flex items-center px-3 py-2 rounded-2xl border transition-all ${
-                  simulatorTheme === 'light' 
-                    ? 'bg-white/80 border-slate-100 text-slate-800' 
+                <div className={`flex-1 flex items-center px-3 py-2 rounded-2xl border transition-all ${simulatorTheme === 'light'
+                    ? 'bg-white/80 border-slate-100 text-slate-800'
                     : 'bg-slate-900/60 border-slate-800/80 text-slate-200'
-                }`}>
+                  }`}>
                   <SearchIcon className="text-slate-400 mr-2" style={{ fontSize: 18 }} />
                   <input
                     type="text"
@@ -903,9 +895,9 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                     className="bg-transparent border-none outline-none text-xs w-full text-inherit placeholder-slate-400"
                   />
                   {searchQuery && (
-                    <CloseIcon 
-                      className="text-slate-400 cursor-pointer ml-1" 
-                      style={{ fontSize: 16 }} 
+                    <CloseIcon
+                      className="text-slate-400 cursor-pointer ml-1"
+                      style={{ fontSize: 16 }}
                       onClick={() => setSearchQuery('')}
                     />
                   )}
@@ -920,11 +912,10 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                     setActiveFilter(nextFilter);
                     triggerToast(`Filtro: ${nextFilter === 'ALL' ? 'Mostrar tudo' : `Status ${nextFilter}`}`, 'info');
                   }}
-                  className={`p-2.5 rounded-2xl border ${
-                    simulatorTheme === 'light'
+                  className={`p-2.5 rounded-2xl border ${simulatorTheme === 'light'
                       ? 'bg-white/80 border-slate-100 text-slate-700'
                       : 'bg-slate-900/60 border-slate-800/80 text-slate-200'
-                  }`}
+                    }`}
                 >
                   <FilterListIcon style={{ fontSize: 18 }} />
                 </IconButton>
@@ -945,11 +936,10 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                           setSelectedUsinaData(usina);
                           setActiveModal('usina_details');
                         }}
-                        className={`p-3 rounded-3xl border flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] ${
-                          simulatorTheme === 'light'
+                        className={`p-3 rounded-3xl border flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] ${simulatorTheme === 'light'
                             ? 'bg-white/95 border-slate-100/80 shadow-sm hover:bg-slate-50'
                             : 'bg-slate-900/70 border-slate-850/80 shadow-md hover:bg-slate-900/90'
-                        }`}
+                          }`}
                       >
                         {/* Left section: Status Indicator and Solar panel thumbnail */}
                         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -982,7 +972,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                             <span className={`block font-black text-xs truncate ${simulatorTheme === 'light' ? 'text-slate-800' : 'text-slate-100'}`}>
                               {usina.name}
                             </span>
-                            
+
                             <div className="text-[10px] text-slate-400 space-y-0.5 mt-0.5 font-medium">
                               <span className="block">E-hoje {usina.eHoje} kWh</span>
                               <span className="block">E-total {usina.eTotal}</span>
@@ -1002,36 +992,36 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                           <div className="mt-1">
                             <svg className="w-11 h-11" viewBox="0 0 44 44">
                               {/* Background track circle */}
-                              <circle 
-                                cx="22" 
-                                cy="22" 
-                                r="18" 
-                                fill="none" 
-                                stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#1e293b'} 
-                                strokeWidth="3.5" 
+                              <circle
+                                cx="22"
+                                cy="22"
+                                r="18"
+                                fill="none"
+                                stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#1e293b'}
+                                strokeWidth="3.5"
                               />
-                              
+
                               {/* Foreground progress circle */}
-                              <circle 
-                                cx="22" 
-                                cy="22" 
-                                r="18" 
-                                fill="none" 
-                                stroke="url(#radialGradient)" 
-                                strokeWidth="3.5" 
-                                strokeDasharray={113.1} 
-                                strokeDashoffset={113.1 - (Math.max(0, Math.min(100, usina.pct)) / 100) * 113.1} 
-                                strokeLinecap="round" 
-                                transform="rotate(-90 22 22)" 
+                              <circle
+                                cx="22"
+                                cy="22"
+                                r="18"
+                                fill="none"
+                                stroke="url(#radialGradient)"
+                                strokeWidth="3.5"
+                                strokeDasharray={113.1}
+                                strokeDashoffset={113.1 - (Math.max(0, Math.min(100, usina.pct)) / 100) * 113.1}
+                                strokeLinecap="round"
+                                transform="rotate(-90 22 22)"
                                 className="transition-all duration-700 ease-out"
                               />
-                              
-                              <text 
-                                x="22" 
-                                y="25" 
-                                textAnchor="middle" 
-                                fontSize="9" 
-                                fontWeight="bold" 
+
+                              <text
+                                x="22"
+                                y="25"
+                                textAnchor="middle"
+                                fontSize="9"
+                                fontWeight="bold"
                                 fill={simulatorTheme === 'light' ? '#334155' : '#e2e8f0'}
                               >
                                 {usina.pct}%
@@ -1054,28 +1044,25 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
           {/* TAB 2: FALHA (FAULTS) */}
           {activeTab === 'falha' && (
             <div className="space-y-4">
-              
+
               {/* Fault Toggle Subtabs */}
-              <div className={`flex p-1 rounded-2xl border ${
-                simulatorTheme === 'light' ? 'bg-slate-100/80 border-slate-200' : 'bg-slate-900 border-slate-800'
-              }`}>
+              <div className={`flex p-1 rounded-2xl border ${simulatorTheme === 'light' ? 'bg-slate-100/80 border-slate-200' : 'bg-slate-900 border-slate-800'
+                }`}>
                 <button
                   onClick={() => setFaultSubTab('current')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-                    faultSubTab === 'current' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${faultSubTab === 'current'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : `${simulatorTheme === 'light' ? 'text-slate-600 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}`
-                  }`}
+                    }`}
                 >
                   Corrente
                 </button>
                 <button
                   onClick={() => setFaultSubTab('history')}
-                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${
-                    faultSubTab === 'history' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${faultSubTab === 'history'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : `${simulatorTheme === 'light' ? 'text-slate-600 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}`
-                  }`}
+                    }`}
                 >
                   Histórico
                 </button>
@@ -1087,8 +1074,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 allUsinas.filter(u => u.status === 'ALERT' || u.status === 'CRITICAL' || u.status === 'OFFLINE').length > 0 ? (
                   <div className="space-y-3">
                     {allUsinas.filter(u => u.status === 'ALERT' || u.status === 'CRITICAL' || u.status === 'OFFLINE').map(u => (
-                      <div 
-                        key={u.id} 
+                      <div
+                        key={u.id}
                         className={`p-4 rounded-3xl border border-rose-500/30 flex items-start gap-3 bg-rose-500/5`}
                       >
                         <ErrorIcon className="text-rose-500 text-xl flex-shrink-0 mt-0.5 animate-bounce" />
@@ -1222,11 +1209,10 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                   <div
                     key={serv.id}
                     onClick={() => setActiveModal(serv.id as any)}
-                    className={`p-4 rounded-3xl border flex flex-col items-center text-center justify-center min-h-[105px] cursor-pointer transition-all hover:scale-[1.02] ${
-                      simulatorTheme === 'light'
+                    className={`p-4 rounded-3xl border flex flex-col items-center text-center justify-center min-h-[105px] cursor-pointer transition-all hover:scale-[1.02] ${simulatorTheme === 'light'
                         ? 'bg-white border-slate-100 shadow-sm shadow-slate-100/50 hover:bg-slate-50'
                         : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900/80'
-                    }`}
+                      }`}
                   >
                     <div className="w-9 h-9 rounded-2xl flex items-center justify-center bg-slate-100/10 mb-2 shadow-inner">
                       {serv.icon}
@@ -1243,7 +1229,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
           {/* TAB 4: EU (PROFILE) */}
           {activeTab === 'eu' && (
             <div className="space-y-4">
-              
+
               {/* Profile Card Header */}
               <div className="rounded-3xl overflow-hidden shadow-md border border-slate-800/20 bg-gradient-to-b from-indigo-800 via-indigo-900 to-slate-900">
                 <div className="h-16 bg-gradient-to-r from-blue-700 to-purple-800 relative">
@@ -1252,7 +1238,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                     <BuildIcon style={{ fontSize: 13 }} />
                   </IconButton>
                 </div>
-                
+
                 <div className="px-5 pb-5 pt-0 flex flex-col items-center text-center -mt-10 relative z-10">
                   {/* Photo Container */}
                   <div className="w-20 h-20 rounded-full border-4 border-slate-900 bg-slate-800 overflow-hidden flex items-center justify-center shadow-lg">
@@ -1262,7 +1248,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                   <span className="block font-black text-sm text-white mt-2">
                     {clientObj?.name || 'Elionaldo'}
                   </span>
-                  
+
                   <span className="block text-[9px] font-mono tracking-wider text-slate-400 mt-0.5">
                     ID: SE-{clientObj?.id ? clientObj.id.slice(0, 6).toUpperCase() : 'CPVYA'}
                   </span>
@@ -1270,9 +1256,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               </div>
 
               {/* Profile Menu options */}
-              <div className={`rounded-3xl border overflow-hidden ${
-                simulatorTheme === 'light' ? 'bg-white border-slate-100' : 'bg-slate-900/60 border-slate-800/80'
-              }`}>
+              <div className={`rounded-3xl border overflow-hidden ${simulatorTheme === 'light' ? 'bg-white border-slate-100' : 'bg-slate-900/60 border-slate-800/80'
+                }`}>
                 {[
                   { id: 'org_mgmt', name: 'Gestão organizacional', icon: <BusinessIcon className="text-slate-400 text-sm" /> },
                   { id: 'account_sec', name: 'Conta e segurança', icon: <SecurityIcon className="text-slate-400 text-sm" /> },
@@ -1293,11 +1278,10 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         setActiveModal(opt.id as any);
                       }
                     }}
-                    className={`px-4 py-3 flex items-center justify-between border-b cursor-pointer transition-colors ${
-                      simulatorTheme === 'light'
+                    className={`px-4 py-3 flex items-center justify-between border-b cursor-pointer transition-colors ${simulatorTheme === 'light'
                         ? 'border-slate-100/50 hover:bg-slate-50'
                         : 'border-slate-800/50 hover:bg-slate-900/50'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       {opt.icon}
@@ -1310,18 +1294,17 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 {/* Clear Cache options */}
                 <div
                   onClick={handleClearCache}
-                  className={`px-4 py-3 flex items-center justify-between border-b cursor-pointer transition-colors ${
-                    simulatorTheme === 'light'
+                  className={`px-4 py-3 flex items-center justify-between border-b cursor-pointer transition-colors ${simulatorTheme === 'light'
                       ? 'border-slate-100/50 hover:bg-slate-50'
                       : 'border-slate-800/50 hover:bg-slate-900/50'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center gap-3">
                     <DeleteSweepIcon className="text-slate-400 text-sm" />
                     <span className="text-[11px] font-bold">Limpar cachê</span>
                     <span className="text-[9px] text-slate-500 font-mono">Imagens, dados, etc.</span>
                   </div>
-                  
+
                   <div className="flex items-center gap-1">
                     {clearingCache ? (
                       <span className="text-[10px] text-orange-500 animate-pulse font-bold">Limpando...</span>
@@ -1356,10 +1339,9 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
         </div>
 
         {/* Floating Add Center Button and Bottom Tab Navigator */}
-        <div className={`absolute bottom-0 left-0 w-full z-45 border-t ${
-          simulatorTheme === 'light' ? 'bg-white/95 border-slate-100/90' : 'bg-slate-950/95 border-slate-900/90'
-        } backdrop-blur-md`}>
-          
+        <div className={`absolute bottom-0 left-0 w-full z-45 border-t ${simulatorTheme === 'light' ? 'bg-white/95 border-slate-100/90' : 'bg-slate-950/95 border-slate-900/90'
+          } backdrop-blur-md`}>
+
           {/* Middle Floating Gradient Plus Button */}
           {!isCliente && (
             <div className="absolute top-[-26px] left-1/2 -translate-x-1/2 z-50">
@@ -1367,9 +1349,9 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 onClick={() => setPlusMenuOpen(prev => !prev)}
                 className="w-[52px] h-[52px] rounded-full bg-gradient-to-tr from-indigo-700 via-purple-600 to-pink-500 text-white shadow-lg hover:shadow-indigo-500/25 flex items-center justify-center transform active:scale-95 hover:scale-105 transition-all outline-none"
               >
-                <AddIcon 
-                  style={{ fontSize: 26 }} 
-                  className={`transition-all duration-300 ${plusMenuOpen ? 'rotate-45' : ''}`} 
+                <AddIcon
+                  style={{ fontSize: 26 }}
+                  className={`transition-all duration-300 ${plusMenuOpen ? 'rotate-45' : ''}`}
                 />
               </button>
             </div>
@@ -1377,7 +1359,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
           {/* Tab buttons */}
           <div className="flex justify-around items-center h-14 relative px-2">
-            
+
             {/* Tab: Plantas */}
             <button
               onClick={() => {
@@ -1386,8 +1368,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               }}
               className="flex-1 flex flex-col items-center justify-center text-center focus:outline-none"
             >
-              <SolarPowerIcon 
-                className={`text-[20px] transition-transform ${activeTab === 'plantas' ? 'text-purple-600 scale-110 font-bold' : 'text-slate-400'}`} 
+              <SolarPowerIcon
+                className={`text-[20px] transition-transform ${activeTab === 'plantas' ? 'text-purple-600 scale-110 font-bold' : 'text-slate-400'}`}
               />
               <span className={`text-[9px] font-bold mt-0.5 ${activeTab === 'plantas' ? 'text-purple-600 font-black' : 'text-slate-400'}`}>
                 Plantas
@@ -1403,8 +1385,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               }}
               className="flex-1 flex flex-col items-center justify-center text-center focus:outline-none pr-6"
             >
-              <WarningIcon 
-                className={`text-[20px] transition-transform ${activeTab === 'falha' ? 'text-purple-600 scale-110' : 'text-slate-400'}`} 
+              <WarningIcon
+                className={`text-[20px] transition-transform ${activeTab === 'falha' ? 'text-purple-600 scale-110' : 'text-slate-400'}`}
               />
               <span className={`text-[9px] font-bold mt-0.5 ${activeTab === 'falha' ? 'text-purple-600 font-black' : 'text-slate-400'}`}>
                 Falha
@@ -1423,8 +1405,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               }}
               className="flex-1 flex flex-col items-center justify-center text-center focus:outline-none pl-6"
             >
-              <SupportAgentIcon 
-                className={`text-[20px] transition-transform ${activeTab === 'servico' ? 'text-purple-600 scale-110' : 'text-slate-400'}`} 
+              <SupportAgentIcon
+                className={`text-[20px] transition-transform ${activeTab === 'servico' ? 'text-purple-600 scale-110' : 'text-slate-400'}`}
               />
               <span className={`text-[9px] font-bold mt-0.5 ${activeTab === 'servico' ? 'text-purple-600 font-black' : 'text-slate-400'}`}>
                 Serviço
@@ -1440,8 +1422,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               }}
               className="flex-1 flex flex-col items-center justify-center text-center focus:outline-none"
             >
-              <AccountCircleIcon 
-                className={`text-[20px] transition-transform ${activeTab === 'eu' ? 'text-purple-600 scale-110' : 'text-slate-400'}`} 
+              <AccountCircleIcon
+                className={`text-[20px] transition-transform ${activeTab === 'eu' ? 'text-purple-600 scale-110' : 'text-slate-400'}`}
               />
               <span className={`text-[9px] font-bold mt-0.5 ${activeTab === 'eu' ? 'text-purple-600 font-black' : 'text-slate-400'}`}>
                 Eu
@@ -1457,14 +1439,13 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
         {/* PLUS BUTTON BOTTOM SHEET DRAWER OVERLAY */}
         {plusMenuOpen && (
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm z-40 transition-opacity">
-            <div className={`absolute bottom-16 left-0 w-full rounded-t-[32px] p-5 shadow-2xl transition-transform transform translate-y-0 ${
-              simulatorTheme === 'light' ? 'bg-white text-slate-800' : 'bg-slate-900 text-slate-100'
-            }`}>
+            <div className={`absolute bottom-16 left-0 w-full rounded-t-[32px] p-5 shadow-2xl transition-transform transform translate-y-0 ${simulatorTheme === 'light' ? 'bg-white text-slate-800' : 'bg-slate-900 text-slate-100'
+              }`}>
               <div className="flex justify-between items-center mb-4">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-400">Ativação de Equipamentos</span>
-                <IconButton 
-                  onClick={() => setPlusMenuOpen(false)} 
-                  size="small" 
+                <IconButton
+                  onClick={() => setPlusMenuOpen(false)}
+                  size="small"
                   className={simulatorTheme === 'light' ? 'text-slate-800' : 'text-white'}
                 >
                   <CloseIcon fontSize="small" />
@@ -1501,12 +1482,11 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
         {/* BOTTOM SHEET / DIALOG MODALS CONTAINER */}
         {activeModal && (
           <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-end justify-center">
-            
+
             {/* Main Modal Shell */}
-            <div className={`w-full rounded-t-[32px] max-h-[80%] overflow-y-auto p-5 shadow-2xl transition-all ${
-              simulatorTheme === 'light' ? 'bg-white text-slate-800' : 'bg-slate-900 text-slate-100'
-            }`}>
-              
+            <div className={`w-full rounded-t-[32px] max-h-[80%] overflow-y-auto p-5 shadow-2xl transition-all ${simulatorTheme === 'light' ? 'bg-white text-slate-800' : 'bg-slate-900 text-slate-100'
+              }`}>
+
               {/* Modal Header */}
               <div className="flex justify-between items-center mb-4 border-b border-slate-800/10 pb-2">
                 <span className="text-xs font-black uppercase tracking-wider text-slate-400">
@@ -1527,7 +1507,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                   {activeModal === 'languages' && 'Configurar Idiomas'}
                   {activeModal === 'privacy' && 'Privacidade'}
                 </span>
-                
+
                 <IconButton onClick={() => { setActiveModal(null); setScanResult(null); }} size="small" className="text-inherit">
                   <CloseIcon fontSize="small" />
                 </IconButton>
@@ -1544,9 +1524,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       placeholder="Ex: Cesar Casa"
                       value={newPlantName}
                       onChange={(e) => setNewPlantName(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     />
                   </div>
 
@@ -1558,9 +1537,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         step="0.01"
                         value={newPlantCapacity}
                         onChange={(e) => setNewPlantCapacity(e.target.value)}
-                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                          simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                        }`}
+                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                          }`}
                       />
                     </div>
                     <div>
@@ -1569,9 +1547,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         type="number"
                         value={newPlantPanels}
                         onChange={(e) => setNewPlantPanels(e.target.value)}
-                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                          simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                        }`}
+                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                          }`}
                       />
                     </div>
                   </div>
@@ -1583,9 +1560,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         type="text"
                         value={newPlantManufacturer}
                         onChange={(e) => setNewPlantManufacturer(e.target.value)}
-                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                          simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                        }`}
+                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                          }`}
                       />
                     </div>
                     <div>
@@ -1594,9 +1570,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         type="text"
                         value={newPlantModel}
                         onChange={(e) => setNewPlantModel(e.target.value)}
-                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                          simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                        }`}
+                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                          }`}
                       />
                     </div>
                   </div>
@@ -1610,9 +1585,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         placeholder="Ex: Fortaleza"
                         value={newPlantCity}
                         onChange={(e) => setNewPlantCity(e.target.value)}
-                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                          simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                        }`}
+                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                          }`}
                       />
                     </div>
                     <div>
@@ -1624,9 +1598,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         maxLength={2}
                         value={newPlantState}
                         onChange={(e) => setNewPlantState(e.target.value)}
-                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                          simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                        }`}
+                        className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                          }`}
                       />
                     </div>
                   </div>
@@ -1638,9 +1611,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       placeholder="Ex: SLS8847192"
                       value={newPlantDatalogger}
                       onChange={(e) => setNewPlantDatalogger(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     />
                   </div>
 
@@ -1763,9 +1735,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       required
                       value={warrantyPlant}
                       onChange={(e) => setWarrantyPlant(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     >
                       <option value="">Selecione...</option>
                       {allUsinas.map(u => (
@@ -1781,9 +1752,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       placeholder="Ex: SLS88471"
                       value={warrantySerial}
                       onChange={(e) => setWarrantySerial(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     />
                   </div>
 
@@ -1795,9 +1765,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       placeholder="Descreva o problema observado..."
                       value={warrantyDesc}
                       onChange={(e) => setWarrantyDesc(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     />
                   </div>
 
@@ -1852,7 +1821,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               {activeModal === 'contact_us' && (
                 <div className="space-y-3 text-center py-2">
                   <p className="text-xs text-slate-400 font-medium">Selecione um canal direto de atendimento da SETEC SOLAR:</p>
-                  
+
                   <div className="space-y-2">
                     <Button
                       variant="contained"
@@ -1918,9 +1887,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       required
                       value={oldPassword}
                       onChange={(e) => setOldPassword(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     />
                   </div>
                   <div>
@@ -1930,9 +1898,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       required
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     />
                   </div>
                   <Button
@@ -1950,37 +1917,37 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               {activeModal === 'notifications' && (
                 <div className="text-left text-xs space-y-4 font-medium">
                   <p className="text-[10px] text-slate-400">Selecione por quais canais você deseja receber os alarmes de falha das usinas:</p>
-                  
+
                   <div className="space-y-3">
                     <div className="flex justify-between items-center">
                       <div>
                         <span className="font-bold block">Relatórios por E-mail</span>
                         <span className="text-[9px] text-slate-400">Resumo semanal de faturamento</span>
                       </div>
-                      <input 
-                        type="checkbox" 
-                        checked={notifEmail} 
+                      <input
+                        type="checkbox"
+                        checked={notifEmail}
                         onChange={(e) => {
                           setNotifEmail(e.target.checked);
                           triggerToast(`E-mail ${e.target.checked ? 'ativado' : 'desativado'}`);
                         }}
-                        className="w-4 h-4 accent-blue-600" 
+                        className="w-4 h-4 accent-blue-600"
                       />
                     </div>
-                    
+
                     <div className="flex justify-between items-center">
                       <div>
                         <span className="font-bold block">Alertas por WhatsApp</span>
                         <span className="text-[9px] text-slate-400">Notificação imediata de usina offline</span>
                       </div>
-                      <input 
-                        type="checkbox" 
-                        checked={notifWhatsapp} 
+                      <input
+                        type="checkbox"
+                        checked={notifWhatsapp}
                         onChange={(e) => {
                           setNotifWhatsapp(e.target.checked);
                           triggerToast(`WhatsApp ${e.target.checked ? 'ativado' : 'desativado'}`);
                         }}
-                        className="w-4 h-4 accent-blue-600" 
+                        className="w-4 h-4 accent-blue-600"
                       />
                     </div>
 
@@ -1989,11 +1956,11 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         <span className="font-bold block">Push Notifications</span>
                         <span className="text-[9px] text-slate-400">Notificações pop-up nativas do app</span>
                       </div>
-                      <input 
-                        type="checkbox" 
-                        checked={notifApp} 
+                      <input
+                        type="checkbox"
+                        checked={notifApp}
                         onChange={(e) => handleTogglePushNotif(e.target.checked)}
-                        className="w-4 h-4 accent-blue-600 cursor-pointer" 
+                        className="w-4 h-4 accent-blue-600 cursor-pointer"
                       />
                     </div>
                   </div>
@@ -2009,9 +1976,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                     <select
                       value={feedbackScore}
                       onChange={(e) => setFeedbackScore(parseInt(e.target.value))}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     >
                       <option value={5}>⭐⭐⭐⭐⭐ (Excelente)</option>
                       <option value={4}>⭐⭐⭐⭐ (Bom)</option>
@@ -2028,9 +1994,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       placeholder="Digite suas observações..."
                       value={feedbackText}
                       onChange={(e) => setFeedbackText(e.target.value)}
-                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${
-                        simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
-                      }`}
+                      className={`w-full p-2.5 rounded-xl border text-xs outline-none bg-transparent ${simulatorTheme === 'light' ? 'border-slate-200 text-slate-800' : 'border-slate-800 text-slate-100'
+                        }`}
                     />
                   </div>
                   <Button
@@ -2049,7 +2014,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               {activeModal === 'data_mig' && (
                 <div className="text-center py-2 space-y-3">
                   <p className="text-xs text-slate-400 font-medium">Simule a exportação da telemetria da sua usina para planilhas:</p>
-                  
+
                   <div className="flex gap-2">
                     <Button
                       variant="outlined"
@@ -2100,11 +2065,10 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         if (!lang.active) triggerToast(`Idioma alterado para ${lang.name}`);
                         setActiveModal(null);
                       }}
-                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer ${
-                        lang.active 
-                          ? 'border-blue-500 bg-blue-500/5 font-extrabold' 
+                      className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer ${lang.active
+                          ? 'border-blue-500 bg-blue-500/5 font-extrabold'
                           : `${simulatorTheme === 'light' ? 'border-slate-100 hover:bg-slate-50' : 'border-slate-800/80 hover:bg-slate-900/50'}`
-                      }`}
+                        }`}
                     >
                       <span>{lang.name}</span>
                       {lang.active && <CheckIcon className="text-blue-500 text-sm" />}
@@ -2129,17 +2093,16 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               {activeModal === 'usina_details' && selectedUsinaData && (
                 <div className="space-y-4 text-left text-xs">
                   {/* Header & Badge */}
-                  <div className={`p-3 rounded-2xl border flex items-center justify-between ${
-                    simulatorTheme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'
-                  }`}>
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between ${simulatorTheme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'
+                    }`}>
                     <div>
                       <span className="font-extrabold text-sm block">{selectedUsinaData.name}</span>
                       <span className="text-[10px] text-slate-400 font-medium">
                         {selectedUsinaData.manufacturer} {selectedUsinaData.model} • SN: {selectedUsinaData.datalogger || 'SE-9871'}
                       </span>
                     </div>
-                    <Chip 
-                      label={selectedUsinaData.status} 
+                    <Chip
+                      label={selectedUsinaData.status}
                       color={selectedUsinaData.status === 'ONLINE' ? 'success' : selectedUsinaData.status === 'ALERT' ? 'warning' : 'error'}
                       size="small"
                       className="font-bold text-[10px]"
@@ -2147,11 +2110,10 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                   </div>
 
                   {/* Real Telemetry Status Badge */}
-                  <div className={`px-3 py-1.5 rounded-xl border flex items-center justify-between text-[10px] ${
-                    selectedUsinaData.isRealData 
+                  <div className={`px-3 py-1.5 rounded-xl border flex items-center justify-between text-[10px] ${selectedUsinaData.isRealData
                       ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold'
                       : 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold'
-                  }`}>
+                    }`}>
                     <span>
                       {selectedUsinaData.isRealData ? '⚡ Telemetria Real em Tempo Real (Inversor)' : '☀️ Telemetria Estimada & Datalogger Cloud'}
                     </span>
@@ -2184,7 +2146,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       <span className="font-extrabold text-[11px] uppercase tracking-wide text-orange-500">Curva Solar Horária (kW)</span>
                       <span className="text-[9px] text-slate-400 font-mono">06:00 → 18:00</span>
                     </div>
-                    
+
                     {/* Dynamic Solar Graph */}
                     <div className="h-28 w-full relative flex items-end pt-2">
                       <svg className="w-full h-full overflow-visible" viewBox="0 0 200 70">
@@ -2194,24 +2156,24 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                             <stop offset="100%" stopColor="#ff6b00" stopOpacity="0.0" />
                           </linearGradient>
                         </defs>
-                        
+
                         {/* Grid lines */}
                         <line x1="0" y1="10" x2="200" y2="10" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} strokeDasharray="2 2" />
                         <line x1="0" y1="35" x2="200" y2="35" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} strokeDasharray="2 2" />
                         <line x1="0" y1="60" x2="200" y2="60" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} />
 
                         {/* Area fill */}
-                        <path 
-                          d="M 10 60 Q 100 0 190 60 L 190 60 L 10 60 Z" 
-                          fill="url(#solarGraphGradient)" 
+                        <path
+                          d="M 10 60 Q 100 0 190 60 L 190 60 L 10 60 Z"
+                          fill="url(#solarGraphGradient)"
                         />
-                        
+
                         {/* Curve stroke */}
-                        <path 
-                          d="M 10 60 Q 100 0 190 60" 
-                          fill="none" 
-                          stroke="#ff6b00" 
-                          strokeWidth="3" 
+                        <path
+                          d="M 10 60 Q 100 0 190 60"
+                          fill="none"
+                          stroke="#ff6b00"
+                          strokeWidth="3"
                           strokeLinecap="round"
                         />
 
@@ -2220,7 +2182,7 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         <circle cx="100" cy="15" r="3" fill="#ffffff" />
                       </svg>
                     </div>
-                    
+
                     {/* Time Legend */}
                     <div className="flex justify-between text-[9px] font-mono text-slate-400 mt-1">
                       <span>06h</span>
@@ -2345,7 +2307,7 @@ export default function App() {
       {/* Rota inicial agora é a tela de login */}
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
-      
+
       {/* Rotas administrativas protegidas */}
       <Route path="/dashboard" element={<AdminWrapper><Dashboard /></AdminWrapper>} />
       <Route path="/clientes" element={<AdminWrapper><Clientes /></AdminWrapper>} />
