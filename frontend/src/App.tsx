@@ -165,11 +165,26 @@ function AppCliente() {
   const clientEmail = localStorage.getItem('user_email') || 'cliente@usinasolar.com';
   const isCliente = localStorage.getItem('user_role') === 'CLIENTE';
   
-  // Find current client
-  const clientObj = clients.find(c => c.email.toLowerCase() === clientEmail.toLowerCase()) || clients[0];
+  // Selected client state (allows switching between clients in simulation or auto-bound to logged user)
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+
+  useEffect(() => {
+    const match = clients.find(c => c.email.toLowerCase() === clientEmail.toLowerCase());
+    if (match) {
+      setSelectedClientId(match.id);
+    } else if (clients.length > 0 && !selectedClientId) {
+      setSelectedClientId(clients[0].id);
+    }
+  }, [clients, clientEmail]);
+
+  // Find current client object
+  const clientObj = clients.find(c => c.id === selectedClientId) || clients.find(c => c.email.toLowerCase() === clientEmail.toLowerCase()) || clients[0];
   
   // Filter usinas for this client
   const clientUsinas = usinas.filter(u => u.clientId === clientObj?.id);
+
+  // Selected Usina for detailed telemetry & report view modal
+  const [selectedUsinaData, setSelectedUsinaData] = useState<any>(null);
 
   // States
   const [activeTab, setActiveTab] = useState<'plantas' | 'falha' | 'servico' | 'eu'>('plantas');
@@ -183,7 +198,7 @@ function AppCliente() {
 
   // Modal / Bottom Sheet States
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
-  const [activeModal, setActiveModal] = useState<null | 'add_plant' | 'scan_qr' | 'product_details' | 'quick_install' | 'warranty' | 'unit_groups' | 'user_manual' | 'contact_us' | 'org_mgmt' | 'account_sec' | 'notifications' | 'app_feedback' | 'data_mig' | 'about_us' | 'languages' | 'privacy'>(null);
+  const [activeModal, setActiveModal] = useState<null | 'add_plant' | 'scan_qr' | 'product_details' | 'quick_install' | 'warranty' | 'unit_groups' | 'user_manual' | 'contact_us' | 'org_mgmt' | 'account_sec' | 'notifications' | 'app_feedback' | 'data_mig' | 'about_us' | 'languages' | 'privacy' | 'usina_details'>(null);
   
   // Toast state
   const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'info' | 'error' } | null>(null);
@@ -220,7 +235,7 @@ function AppCliente() {
   // Profile switches
   const [notifEmail, setNotifEmail] = useState(true);
   const [notifWhatsapp, setNotifWhatsapp] = useState(true);
-  const [notifApp, setNotifApp] = useState(false);
+  const [notifApp, setNotifApp] = useState<boolean>(() => localStorage.getItem('push_notifications_enabled') === 'true');
 
   // Password reset simulation
   const [oldPassword, setOldPassword] = useState('');
@@ -229,6 +244,86 @@ function AppCliente() {
   // QR scanner simulation
   const [scanning, setScanning] = useState(false);
   const [scanResult, setScanResult] = useState<string | null>(null);
+
+  // Push notification permission handler
+  const requestPushPermission = async () => {
+    if (!('Notification' in window)) {
+      triggerToast('Seu navegador não suporta notificações Push.', 'info');
+      return false;
+    }
+    if (Notification.permission === 'granted') {
+      return true;
+    }
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === 'granted') {
+        triggerToast('Notificações Push autorizadas no dispositivo!', 'success');
+        return true;
+      } else {
+        triggerToast('Permissão de Notificação Push foi negada pelo navegador.', 'error');
+        return false;
+      }
+    } catch (err) {
+      console.error(err);
+      return false;
+    }
+  };
+
+  const handleTogglePushNotif = async (checked: boolean) => {
+    setNotifApp(checked);
+    localStorage.setItem('push_notifications_enabled', checked ? 'true' : 'false');
+    if (checked) {
+      const granted = await requestPushPermission();
+      if (granted && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('SETEC Solar — Monitoramento Ativo', {
+          body: 'Notificações Push ativadas com sucesso! Você receberá alertas em tempo real sobre sua usina.',
+          icon: logoSetec
+        });
+      }
+    } else {
+      triggerToast('Notificações Push desativadas.');
+    }
+  };
+
+  // Report export handler
+  const handleExportReport = (usinaName: string, format: 'PDF' | 'CSV') => {
+    const dataUsina = selectedUsinaData || { name: usinaName, capacityKwp: 4.5, eHoje: '16.1', eTotal: '43.5 kWh', status: 'ONLINE' };
+    const content = `=====================================================
+          REDUÇÃO & GERAÇÃO ENERGÉTICA - SETEC SOLAR
+=====================================================
+Usina: ${dataUsina.name}
+Cliente Responsável: ${clientObj?.name || 'Cliente SETEC'}
+E-mail: ${clientObj?.email || 'N/A'}
+Data do Relatório: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}
+
+--- MÉTRICAS TÉCNICAS DA USINA ---
+Potência Instalada: ${dataUsina.capacityKwp} kWp
+Geração Hoje (E-Hoje): ${dataUsina.eHoje} kWh
+Geração Acumulada (E-Total): ${dataUsina.eTotal}
+Status Operacional: ${dataUsina.status}
+Desempenho Estimado (PR): 86.4%
+
+--- IMPACTO FINANCEIRO E AMBIENTAL ---
+Economia Financeira Estimada: R$ ${(parseFloat(dataUsina.eHoje || '16.1') * 0.95 * 30).toFixed(2)} / mês
+Emissões de CO2 Evitadas: ${(parseFloat(dataUsina.eHoje || '16.1') * 0.42 * 30).toFixed(1)} kg CO2
+Árvores Salvas Equivalentes: ${Math.max(1, Math.round(parseFloat(dataUsina.eHoje || '16.1') * 0.6))} árvores
+
+-----------------------------------------------------
+SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
+`;
+
+    const blob = new Blob([content], { type: format === 'CSV' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Relatorio_Geracao_${usinaName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${format.toLowerCase()}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    triggerToast(`Relatório em ${format} gerado e baixado!`, 'success');
+  };
 
   // Update clock
   useEffect(() => {
@@ -595,6 +690,36 @@ function AppCliente() {
           </div>
         </div>
 
+        {/* Client Account Selector Bar */}
+        <div className={`px-4 py-2 border-b flex items-center justify-between text-xs ${
+          simulatorTheme === 'light' ? 'bg-orange-500/5 border-orange-200/50 text-slate-700' : 'bg-orange-500/10 border-orange-500/20 text-slate-300'
+        }`}>
+          <div className="flex items-center gap-1.5 font-bold truncate">
+            <PersonIcon className="text-orange-500" style={{ fontSize: 16 }} />
+            <span className="truncate">{clientObj?.name || 'Cliente'}</span>
+          </div>
+          {clients.length > 0 && (
+            <select
+              value={clientObj?.id || ''}
+              onChange={(e) => {
+                const found = clients.find(c => c.id === e.target.value);
+                if (found) {
+                  localStorage.setItem('user_email', found.email);
+                  setSelectedClientId(found.id);
+                  triggerToast(`Perfil alterado: ${found.name}`, 'info');
+                }
+              }}
+              className={`text-[11px] font-bold rounded-lg px-2 py-1 outline-none border cursor-pointer ${
+                simulatorTheme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-slate-900 border-slate-700 text-slate-200'
+              }`}
+            >
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
         {/* Dynamic Simulator Screen Content */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-20 relative">
           
@@ -732,10 +857,14 @@ function AppCliente() {
                     return (
                       <div
                         key={usina.id}
-                        className={`p-3 rounded-3xl border flex items-center justify-between transition-all hover:scale-[1.01] ${
+                        onClick={() => {
+                          setSelectedUsinaData(usina);
+                          setActiveModal('usina_details');
+                        }}
+                        className={`p-3 rounded-3xl border flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] ${
                           simulatorTheme === 'light'
-                            ? 'bg-white/95 border-slate-100/80 shadow-sm'
-                            : 'bg-slate-900/70 border-slate-850/80 shadow-md'
+                            ? 'bg-white/95 border-slate-100/80 shadow-sm hover:bg-slate-50'
+                            : 'bg-slate-900/70 border-slate-850/80 shadow-md hover:bg-slate-900/90'
                         }`}
                       >
                         {/* Left section: Status Indicator and Solar panel thumbnail */}
@@ -883,6 +1012,27 @@ function AppCliente() {
                           <span className="block font-black text-xs text-rose-500">{u.name}</span>
                           <span className="block text-[11px] font-bold mt-1 text-slate-200">Alarme: Falha de comunicação</span>
                           <span className="block text-[10px] text-slate-400 mt-0.5">Datalogger serial {u.datalogger || 'N/A'} desconectou do servidor em nuvem.</span>
+                          <Button
+                            variant="contained"
+                            color="error"
+                            size="small"
+                            className="mt-2.5 rounded-xl font-bold text-[10px] py-1"
+                            onClick={async () => {
+                              try {
+                                const t = await addTicket({
+                                  clientId: clientObj?.id || '',
+                                  category: 'INVERTER',
+                                  title: `Chamado Automático: Falha na Usina ${u.name}`,
+                                  description: `Alerta emitido pelo App do Cliente. Usina: ${u.name}, Datalogger: ${u.datalogger || 'N/A'}, Status: ${u.status}`
+                                });
+                                triggerToast(`Chamado #${t.id.slice(0, 6).toUpperCase()} aberto no NOC!`, 'success');
+                              } catch (err) {
+                                triggerToast('Erro ao abrir chamado.', 'error');
+                              }
+                            }}
+                          >
+                            Abrir Chamado Técnico SETEC
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -1758,11 +1908,8 @@ function AppCliente() {
                       <input 
                         type="checkbox" 
                         checked={notifApp} 
-                        onChange={(e) => {
-                          setNotifApp(e.target.checked);
-                          triggerToast(`Push ${e.target.checked ? 'ativado' : 'desativado'}`);
-                        }}
-                        className="w-4 h-4 accent-blue-600" 
+                        onChange={(e) => handleTogglePushNotif(e.target.checked)}
+                        className="w-4 h-4 accent-blue-600 cursor-pointer" 
                       />
                     </div>
                   </div>
@@ -1891,6 +2038,170 @@ function AppCliente() {
                   <p>
                     Não compartilhamos nenhuma informação pessoal identificável com terceiros sem consentimento. Todos os dados são transmitidos utilizando criptografia TLS 1.3 de ponta a ponta.
                   </p>
+                </div>
+              )}
+
+              {/* MODAL: USINA DETAILS & DETAILED GENERATION MONITORING REPORT */}
+              {activeModal === 'usina_details' && selectedUsinaData && (
+                <div className="space-y-4 text-left text-xs">
+                  {/* Header & Badge */}
+                  <div className={`p-3 rounded-2xl border flex items-center justify-between ${
+                    simulatorTheme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-900 border-slate-800'
+                  }`}>
+                    <div>
+                      <span className="font-extrabold text-sm block">{selectedUsinaData.name}</span>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {selectedUsinaData.manufacturer} {selectedUsinaData.model} • SN: {selectedUsinaData.datalogger || 'SE-9871'}
+                      </span>
+                    </div>
+                    <Chip 
+                      label={selectedUsinaData.status} 
+                      color={selectedUsinaData.status === 'ONLINE' ? 'success' : selectedUsinaData.status === 'ALERT' ? 'warning' : 'error'}
+                      size="small"
+                      className="font-bold text-[10px]"
+                    />
+                  </div>
+
+                  {/* Generation Telemetry Cards Grid */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`p-3 rounded-2xl border ${simulatorTheme === 'light' ? 'bg-amber-500/5 border-amber-200/50' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                      <span className="text-[10px] font-bold text-amber-500 uppercase block">Potência Atual</span>
+                      <span className="text-lg font-black block mt-0.5">{selectedUsinaData.powerVal} {selectedUsinaData.powerUnit}</span>
+                      <span className="text-[9px] text-slate-400 block">Capacidade: {selectedUsinaData.capacityKwp} kWp</span>
+                    </div>
+                    <div className={`p-3 rounded-2xl border ${simulatorTheme === 'light' ? 'bg-blue-500/5 border-blue-200/50' : 'bg-blue-500/10 border-blue-500/20'}`}>
+                      <span className="text-[10px] font-bold text-blue-500 uppercase block">Geração Hoje (E-Hoje)</span>
+                      <span className="text-lg font-black block mt-0.5">{selectedUsinaData.eHoje} kWh</span>
+                      <span className="text-[9px] text-slate-400 block">Total: {selectedUsinaData.eTotal}</span>
+                    </div>
+                  </div>
+
+                  {/* Solar Generation Hourly Curve SVG */}
+                  <div className={`p-3 rounded-2xl border ${simulatorTheme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-extrabold text-[11px] uppercase tracking-wide text-orange-500">Curva Solar Horária (kW)</span>
+                      <span className="text-[9px] text-slate-400 font-mono">06:00 → 18:00</span>
+                    </div>
+                    
+                    {/* Dynamic Solar Graph */}
+                    <div className="h-28 w-full relative flex items-end pt-2">
+                      <svg className="w-full h-full overflow-visible" viewBox="0 0 200 70">
+                        <defs>
+                          <linearGradient id="solarGraphGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#ff6b00" stopOpacity="0.6" />
+                            <stop offset="100%" stopColor="#ff6b00" stopOpacity="0.0" />
+                          </linearGradient>
+                        </defs>
+                        
+                        {/* Grid lines */}
+                        <line x1="0" y1="10" x2="200" y2="10" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} strokeDasharray="2 2" />
+                        <line x1="0" y1="35" x2="200" y2="35" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} strokeDasharray="2 2" />
+                        <line x1="0" y1="60" x2="200" y2="60" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} />
+
+                        {/* Area fill */}
+                        <path 
+                          d="M 10 60 Q 100 0 190 60 L 190 60 L 10 60 Z" 
+                          fill="url(#solarGraphGradient)" 
+                        />
+                        
+                        {/* Curve stroke */}
+                        <path 
+                          d="M 10 60 Q 100 0 190 60" 
+                          fill="none" 
+                          stroke="#ff6b00" 
+                          strokeWidth="3" 
+                          strokeLinecap="round"
+                        />
+
+                        {/* Peak solar point indicator */}
+                        <circle cx="100" cy="15" r="4" fill="#ff6b00" className="animate-ping" style={{ animationDuration: '2s' }} />
+                        <circle cx="100" cy="15" r="3" fill="#ffffff" />
+                      </svg>
+                    </div>
+                    
+                    {/* Time Legend */}
+                    <div className="flex justify-between text-[9px] font-mono text-slate-400 mt-1">
+                      <span>06h</span>
+                      <span>09h</span>
+                      <span>12h (Pico)</span>
+                      <span>15h</span>
+                      <span>18h</span>
+                    </div>
+                  </div>
+
+                  {/* Financial & Environmental Return */}
+                  <div className={`p-3 rounded-2xl border space-y-2 ${simulatorTheme === 'light' ? 'bg-emerald-500/5 border-emerald-200/50' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+                    <span className="font-extrabold text-[11px] text-emerald-500 uppercase block">Impacto Financeiro & Sustentável</span>
+                    <div className="grid grid-cols-3 gap-1 text-center">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block">Economia</span>
+                        <span className="font-extrabold text-xs text-emerald-500">R$ {(parseFloat(selectedUsinaData.eHoje || '16.1') * 0.95 * 30).toFixed(0)}/mês</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block">CO2 Evitado</span>
+                        <span className="font-extrabold text-xs text-slate-200">{(parseFloat(selectedUsinaData.eHoje || '16.1') * 0.42 * 30).toFixed(0)} kg</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] text-slate-400 block">Árvores Salvas</span>
+                        <span className="font-extrabold text-xs text-slate-200">🌳 {Math.max(1, Math.round(parseFloat(selectedUsinaData.eHoje || '16.1') * 0.6))}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons: Push Simulation & Report Download */}
+                  <div className="space-y-2 pt-1">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        fullWidth
+                        className="rounded-xl font-bold py-2.5 text-[10px]"
+                        onClick={() => handleExportReport(selectedUsinaData.name, 'PDF')}
+                      >
+                        📄 Exportar PDF
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        fullWidth
+                        className="rounded-xl font-bold py-2.5 text-[10px]"
+                        onClick={() => handleExportReport(selectedUsinaData.name, 'CSV')}
+                      >
+                        📊 Exportar CSV
+                      </Button>
+                    </div>
+
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      fullWidth
+                      className="rounded-xl font-bold py-2 text-[10px]"
+                      onClick={() => {
+                        if (!('Notification' in window)) {
+                          triggerToast('Notificações não suportadas neste navegador.', 'info');
+                          return;
+                        }
+                        if (Notification.permission === 'granted') {
+                          new Notification(`⚠️ Alerta SETEC Solar: Usina ${selectedUsinaData.name}`, {
+                            body: `Notificação Push enviada para teste! Status da usina: ${selectedUsinaData.status}. Geração atual: ${selectedUsinaData.powerVal} ${selectedUsinaData.powerUnit}.`,
+                            icon: logoSetec
+                          });
+                          triggerToast('Notificação Push nativa enviada para o dispositivo!', 'success');
+                        } else {
+                          requestPushPermission().then(granted => {
+                            if (granted) {
+                              new Notification(`⚠️ Alerta SETEC Solar: Usina ${selectedUsinaData.name}`, {
+                                body: `Notificação Push ativada! Status da usina: ${selectedUsinaData.status}.`,
+                                icon: logoSetec
+                              });
+                            }
+                          });
+                        }
+                      }}
+                    >
+                      🔔 Testar Notificação Push de Alerta
+                    </Button>
+                  </div>
                 </div>
               )}
 

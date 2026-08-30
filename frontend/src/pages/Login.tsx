@@ -9,7 +9,9 @@ const perfis: { value: Role; label: string; email: string }[] = [
   { value: 'GESTOR',      label: 'Gestor — Clientes e financeiro', email: 'gestor@setecsolar.com' },
   { value: 'OPERADOR',    label: 'Operador — Monitoramento / NOC', email: 'operador@setecsolar.com' },
   { value: 'TECNICO',     label: 'Técnico — Chamados e manutenção', email: 'tecnico@setecsolar.com' },
-  { value: 'CLIENTE',     label: 'Cliente — Somente minha usina', email: 'cliente@usinasolar.com' },
+  { value: 'CLIENTE',     label: 'Cliente — Elionaldo (Usina Casa)', email: 'elionaldo@setec.com' },
+  { value: 'CLIENTE',     label: 'Cliente — Tadeu (Usina Tadeu Casa)', email: 'tadeu@setec.com' },
+  { value: 'CLIENTE',     label: 'Cliente — Bruno (Usina Bruno ABPS)', email: 'bruno@setec.com' },
 ];
 
 export default function Login() {
