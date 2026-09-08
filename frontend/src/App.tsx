@@ -712,8 +712,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
       {/* Phone Viewport Simulator Container */}
       <Paper className={`w-full max-w-md min-h-screen md:min-h-[860px] md:max-h-[890px] ${simulatorTheme === 'light'
-          ? 'bg-gradient-to-tr from-violet-100/40 via-white to-pink-100/30 text-slate-800'
-          : 'bg-slate-950 text-slate-100'
+        ? 'bg-gradient-to-tr from-violet-100/40 via-white to-pink-100/30 text-slate-800'
+        : 'bg-slate-950 text-slate-100'
         } border-0 md:border-[8px] md:border-slate-900 shadow-2xl overflow-hidden flex flex-col justify-between md:rounded-[40px] relative transition-all duration-300`}>
 
         {/* Mobile top Notch / Dynamic Island */}
@@ -807,8 +807,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
               {/* Weather and Solar Arc Header */}
               <div className={`p-4 rounded-3xl border flex flex-col relative overflow-hidden transition-all ${simulatorTheme === 'light'
-                  ? 'bg-white/80 border-slate-100 shadow-sm shadow-slate-100/50'
-                  : 'bg-slate-900/60 border-slate-800/80 shadow-md'
+                ? 'bg-white/80 border-slate-100 shadow-sm shadow-slate-100/50'
+                : 'bg-slate-900/60 border-slate-800/80 shadow-md'
                 }`}>
                 {/* Weather main line */}
                 <div className="flex justify-between items-start mb-2 relative z-10">
@@ -883,8 +883,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
               {/* Interactive Search Bar & Filter */}
               <div className="flex gap-2">
                 <div className={`flex-1 flex items-center px-3 py-2 rounded-2xl border transition-all ${simulatorTheme === 'light'
-                    ? 'bg-white/80 border-slate-100 text-slate-800'
-                    : 'bg-slate-900/60 border-slate-800/80 text-slate-200'
+                  ? 'bg-white/80 border-slate-100 text-slate-800'
+                  : 'bg-slate-900/60 border-slate-800/80 text-slate-200'
                   }`}>
                   <SearchIcon className="text-slate-400 mr-2" style={{ fontSize: 18 }} />
                   <input
@@ -913,8 +913,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                     triggerToast(`Filtro: ${nextFilter === 'ALL' ? 'Mostrar tudo' : `Status ${nextFilter}`}`, 'info');
                   }}
                   className={`p-2.5 rounded-2xl border ${simulatorTheme === 'light'
-                      ? 'bg-white/80 border-slate-100 text-slate-700'
-                      : 'bg-slate-900/60 border-slate-800/80 text-slate-200'
+                    ? 'bg-white/80 border-slate-100 text-slate-700'
+                    : 'bg-slate-900/60 border-slate-800/80 text-slate-200'
                     }`}
                 >
                   <FilterListIcon style={{ fontSize: 18 }} />
@@ -937,8 +937,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                           setActiveModal('usina_details');
                         }}
                         className={`p-3 rounded-3xl border flex items-center justify-between cursor-pointer transition-all hover:scale-[1.01] ${simulatorTheme === 'light'
-                            ? 'bg-white/95 border-slate-100/80 shadow-sm hover:bg-slate-50'
-                            : 'bg-slate-900/70 border-slate-850/80 shadow-md hover:bg-slate-900/90'
+                          ? 'bg-white/95 border-slate-100/80 shadow-sm hover:bg-slate-50'
+                          : 'bg-slate-900/70 border-slate-850/80 shadow-md hover:bg-slate-900/90'
                           }`}
                       >
                         {/* Left section: Status Indicator and Solar panel thumbnail */}
@@ -1051,8 +1051,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 <button
                   onClick={() => setFaultSubTab('current')}
                   className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${faultSubTab === 'current'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : `${simulatorTheme === 'light' ? 'text-slate-600 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}`
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : `${simulatorTheme === 'light' ? 'text-slate-600 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}`
                     }`}
                 >
                   Corrente
@@ -1060,8 +1060,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 <button
                   onClick={() => setFaultSubTab('history')}
                   className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all ${faultSubTab === 'history'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : `${simulatorTheme === 'light' ? 'text-slate-600 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}`
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : `${simulatorTheme === 'light' ? 'text-slate-600 hover:text-slate-800' : 'text-slate-400 hover:text-slate-200'}`
                     }`}
                 >
                   Histórico
@@ -1210,8 +1210,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                     key={serv.id}
                     onClick={() => setActiveModal(serv.id as any)}
                     className={`p-4 rounded-3xl border flex flex-col items-center text-center justify-center min-h-[105px] cursor-pointer transition-all hover:scale-[1.02] ${simulatorTheme === 'light'
-                        ? 'bg-white border-slate-100 shadow-sm shadow-slate-100/50 hover:bg-slate-50'
-                        : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900/80'
+                      ? 'bg-white border-slate-100 shadow-sm shadow-slate-100/50 hover:bg-slate-50'
+                      : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-900/80'
                       }`}
                   >
                     <div className="w-9 h-9 rounded-2xl flex items-center justify-center bg-slate-100/10 mb-2 shadow-inner">
@@ -1279,8 +1279,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                       }
                     }}
                     className={`px-4 py-3 flex items-center justify-between border-b cursor-pointer transition-colors ${simulatorTheme === 'light'
-                        ? 'border-slate-100/50 hover:bg-slate-50'
-                        : 'border-slate-800/50 hover:bg-slate-900/50'
+                      ? 'border-slate-100/50 hover:bg-slate-50'
+                      : 'border-slate-800/50 hover:bg-slate-900/50'
                       }`}
                   >
                     <div className="flex items-center gap-3">
@@ -1295,8 +1295,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 <div
                   onClick={handleClearCache}
                   className={`px-4 py-3 flex items-center justify-between border-b cursor-pointer transition-colors ${simulatorTheme === 'light'
-                      ? 'border-slate-100/50 hover:bg-slate-50'
-                      : 'border-slate-800/50 hover:bg-slate-900/50'
+                    ? 'border-slate-100/50 hover:bg-slate-50'
+                    : 'border-slate-800/50 hover:bg-slate-900/50'
                     }`}
                 >
                   <div className="flex items-center gap-3">
@@ -2066,8 +2066,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                         setActiveModal(null);
                       }}
                       className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer ${lang.active
-                          ? 'border-blue-500 bg-blue-500/5 font-extrabold'
-                          : `${simulatorTheme === 'light' ? 'border-slate-100 hover:bg-slate-50' : 'border-slate-800/80 hover:bg-slate-900/50'}`
+                        ? 'border-blue-500 bg-blue-500/5 font-extrabold'
+                        : `${simulatorTheme === 'light' ? 'border-slate-100 hover:bg-slate-50' : 'border-slate-800/80 hover:bg-slate-900/50'}`
                         }`}
                     >
                       <span>{lang.name}</span>
@@ -2111,8 +2111,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
                   {/* Real Telemetry Status Badge */}
                   <div className={`px-3 py-1.5 rounded-xl border flex items-center justify-between text-[10px] ${selectedUsinaData.isRealData
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold'
-                      : 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold'
+                    : 'bg-blue-500/10 border-blue-500/30 text-blue-400 font-semibold'
                     }`}>
                     <span>
                       {selectedUsinaData.isRealData ? '⚡ Telemetria Real em Tempo Real (Inversor)' : '☀️ Telemetria Estimada & Datalogger Cloud'}
