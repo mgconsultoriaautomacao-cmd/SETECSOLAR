@@ -7,6 +7,7 @@ export interface SolplanetReading {
   powerNow: number | null;
   generationToday: number | null;
   generationTotal: number | null;
+  temperature?: number | null;
   status: string;
 }
 
@@ -19,10 +20,10 @@ export interface SolplanetDiscoveryResult {
   rawResponse?: any;
 }
 
-// Hosts da API Solplanet Pro (AISWEI Cloud) — EU primeiro, depois global
+// Host oficial conforme documentação AISWEI API Business Singapore
 const SOLPLANET_HOSTS = [
+  'https://ap-southeast-1-api-genergal.aisweicloud.com',
   'https://api.general.aisweicloud.com',
-  'https://eu-api.general.aisweicloud.com',
   'https://api.aisweicloud.com',
 ];
 
@@ -31,15 +32,10 @@ export class SolplanetService {
   private readonly logger = new Logger(SolplanetService.name);
 
   /**
-   * Gera a assinatura HMAC-SHA256 para autenticação na API Aiswei/Solplanet Pro.
-   *
-   * Estrutura da string de assinatura (conforme documentação e implementações open-source):
-   *   {METHOD}\n{Accept}\n\n{Content-Type}\n\nX-Ca-Key:{appKey}\n{endpoint_com_query_string}
-   *
-   * O endpoint assinado DEVE conter os parâmetros em ordem alfabética.
+   * Gera a assinatura HMAC-SHA256 para o Alibaba Cloud API Gateway da AISWEI / Solplanet.
    */
   private generateSignature(
-    endpoint: string, // path + query string ordenada alfabeticamente
+    endpoint: string, // path + query string com parâmetros ordenados alfabeticamente
     appKey: string,
     appSecret: string
   ): Record<string, string> {
@@ -59,43 +55,40 @@ export class SolplanetService {
       'Content-Type': contentType,
       'Accept': accept,
       'X-Ca-Signature-Headers': 'X-Ca-Key',
-      'X-Ca-Key': appKey,
+      'X-Ca-Key': String(appKey),
       'X-Ca-Signature': signature,
+      'X-Ca-Stage': 'RELEASE',
     };
   }
 
   /**
-   * Monta o path?query com parâmetros ordenados ALFABETICAMENTE (obrigatório pela API).
-   * Parâmetros com valor vazio são incluídos somente se não forem opcionais.
+   * Monta a URL com os parâmetros de consulta ordenados alfabeticamente.
    */
   private buildEndpoint(
     path: string,
-    params: Record<string, string | undefined>
+    params: Record<string, string | number | undefined>
   ): string {
-    // Remove chaves com valor undefined/null/vazio
     const clean: Record<string, string> = {};
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== null && v !== '') {
-        clean[k] = v;
+        clean[k] = String(v);
       }
     }
 
-    // Ordenação alfabética das chaves (requisito Aiswei)
     const sorted = Object.keys(clean)
       .sort()
-      .map(k => `${k}=${clean[k]}`)
+      .map(k => `${k}=${encodeURIComponent(clean[k])}`)
       .join('&');
 
     return sorted ? `${path}?${sorted}` : path;
   }
 
   /**
-   * Executa um GET autenticado na API Solplanet Pro, tentando os hosts em ordem.
-   * Retorna o primeiro resultado bem-sucedido ou lança o último erro.
+   * Executa uma requisição GET autenticada aos servidores da Solplanet / AISWEI.
    */
-  private async makeRequest(
+  async makeRequest(
     path: string,
-    params: Record<string, string | undefined>,
+    params: Record<string, string | number | undefined>,
     appKey: string,
     appSecret: string,
   ): Promise<any> {
@@ -103,287 +96,88 @@ export class SolplanetService {
     const headers = this.generateSignature(endpoint, appKey, appSecret);
 
     let lastError: any = null;
-    let lastResponse: any = null;
 
     for (const host of SOLPLANET_HOSTS) {
       const url = `${host}${endpoint}`;
       try {
-        this.logger.debug(`Solplanet → ${url}`);
+        this.logger.debug(`Solplanet GET ${url}`);
         const response = await axios.get(url, {
           headers,
           timeout: 12000,
           httpsAgent: new https.Agent({ rejectUnauthorized: false }),
         });
 
-        // Captura o header de erro da Aiswei API (presente em erros de auth)
-        const apiError = response.headers?.['x-ca-error-message'] || response.headers?.['x-ca-error-code'];
-        if (apiError) {
-          this.logger.warn(`Solplanet X-Ca-Error em ${host}: ${apiError}`);
+        if (response.data && (response.data.status === 200 || response.data.code === 200 || response.data.success)) {
+          return response.data;
         }
 
-        if (response.data !== undefined) {
-          lastResponse = response.data;
-          // Verifica se há sucesso real ou se é erro de autenticação
-          if (response.data?.success === false || response.data?.code !== undefined && response.data?.code !== 0) {
-            this.logger.warn(`Solplanet resposta com erro em ${host}: ${JSON.stringify(response.data)}`);
-            // Continua tentando outros hosts
-            continue;
-          }
+        if (response.data) {
+          this.logger.warn(`Solplanet retorno com aviso em ${host}: ${JSON.stringify(response.data)}`);
           return response.data;
         }
       } catch (err: any) {
-        const apiErr = err.response?.headers?.['x-ca-error-message'] || err.response?.headers?.['x-ca-error-code'];
-        lastError = {
-          host,
-          message: err.message,
-          status: err.response?.status,
-          apiError: apiErr,
-          responseData: err.response?.data,
-        };
-        this.logger.warn(`Solplanet falhou em ${host}: ${err.message}${apiErr ? ` | X-Ca-Error: ${apiErr}` : ''}`);
+        lastError = err;
+        this.logger.warn(`Solplanet erro em ${host}: ${err.message}`);
       }
     }
 
-    // Se chegou aqui, nenhum host respondeu com sucesso
-    const errMsg = lastError
-      ? `${lastError.message}${lastError.apiError ? ` | Erro API: ${lastError.apiError}` : ''}`
-      : 'Sem resposta de nenhum host Solplanet';
-
-    throw Object.assign(new Error(errMsg), { lastResponse, lastError });
-  }
-
-  /**
-   * Lê dados em tempo real de um inversor Solplanet via Cloud API Pro.
-   *
-   * Parâmetros de credenciais conforme documentação Aiswei:
-   *   - appKey    = ID da conta Pro (ex: "205024856")
-   *   - appSecret = APP_SECRET ou API_KEY da conta
-   *   - isnos     = Serial Number do inversor (ex: "AP001005P2482178")
-   *
-   * O campo "token" é opcional para algumas contas Pro. Se não disponível,
-   * o sistema usa apikey como token (comportamento padrão da API pública).
-   */
-  async readUsinaFromCloud(
-    inverterSn: string,
-    appKey: string,
-    appSecret: string,
-    token?: string,
-    apiKey?: string,
-  ): Promise<SolplanetReading | null> {
-    try {
-      // Na API Solplanet Pro, apikey é o parâmetro de acesso ao inversor
-      // token é o token de autenticação Pro (separado do apikey)
-      const effectiveApiKey = apiKey || appSecret; // fallback: usa appSecret como apiKey
-
-      // Tentativa 1: getInverterOverviewPro — dados em tempo real do inversor
-      const overviewData = await this.makeRequest(
-        '/pro/getInverterOverviewPro',
-        {
-          apikey: effectiveApiKey,
-          isnos: inverterSn,
-          ...(token ? { token } : {}),
-        },
-        appKey,
-        appSecret,
-      ).catch((err) => {
-        this.logger.debug(`getInverterOverviewPro falhou: ${err.message}`);
-        return null;
-      });
-
-      if (overviewData?.success && overviewData.data) {
-        return this.parseOverviewData(overviewData.data);
-      }
-
-      // Tentativa 2: getLastTsDataPro — última telemetria
-      const tsData = await this.makeRequest(
-        '/pro/getLastTsDataPro',
-        {
-          apikey: effectiveApiKey,
-          isnos: inverterSn,
-          ...(token ? { token } : {}),
-        },
-        appKey,
-        appSecret,
-      ).catch(() => null);
-
-      if (tsData?.success && tsData.data) {
-        const list: any[] = Array.isArray(tsData.data) ? tsData.data : [tsData.data];
-        const device = list.find((d: any) => d?.sn === inverterSn) || list[0];
-        if (device) return this.parseDeviceData(device);
-      }
-
-      this.logger.warn(`Solplanet: nenhum dado retornado para SN ${inverterSn}. Conta pode precisar de liberação de API.`);
-      return null;
-    } catch (error: any) {
-      this.logger.error(`Erro Solplanet API (SN ${inverterSn}): ${error.message}`);
-      return null;
+    if (lastError) {
+      throw lastError;
     }
-  }
-
-  private parseOverviewData(d: any): SolplanetReading {
-    const pac = parseFloat(d.pac ?? d.power ?? '0');
-    const etd = parseFloat(d.etoday ?? d.etd ?? '0');
-    const eto = parseFloat(d.etotal ?? d.eto ?? '0');
-    return {
-      powerNow: isNaN(pac) ? null : (pac > 100 ? pac / 1000 : pac),
-      generationToday: isNaN(etd) ? null : etd,
-      generationTotal: isNaN(eto) ? null : eto,
-      status: pac > 10 ? 'ONLINE' : 'OFFLINE',
-    };
-  }
-
-  private parseDeviceData(device: any): SolplanetReading {
-    const pac = parseFloat(device.pac ?? '0');
-    const etd = parseFloat(device.etoday ?? device.etd ?? '0');
-    const eto = parseFloat(device.etotal ?? device.eto ?? '0');
-    return {
-      powerNow: isNaN(pac) ? null : (pac > 100 ? pac / 1000 : pac),
-      generationToday: isNaN(etd) ? null : etd,
-      generationTotal: isNaN(eto) ? null : eto,
-      status: pac > 10 ? 'ONLINE' : 'OFFLINE',
-    };
+    return null;
   }
 
   /**
-   * Lista todas as plantas/usinas da conta Solplanet Pro.
-   *
-   * IMPORTANTE: Este endpoint pode exigir liberação explícita pela Solplanet.
-   * Se retornar vazio ou erro de permissão, entre em contato com:
-   *   service.latam@solplanet.net — solicitar "liberação das interfaces de lista de plantas e dispositivos"
+   * Lista todas as usinas (plantas) cadastradas na conta Solplanet Pro via getPlanListPro.
    */
   async listPlants(
     appKey: string,
     appSecret: string,
-    token?: string,
+    token: string,
     apiKey?: string,
   ): Promise<any[]> {
-    const effectiveApiKey = apiKey || appSecret;
-
     try {
-      const data = await this.makeRequest(
+      const res = await this.makeRequest(
         '/pro/getPlanListPro',
         {
-          apikey: effectiveApiKey,
-          ...(token ? { token } : {}),
-          // isnos não é incluído para listagem geral
+          token,
+          order: 0,
+          pageNum: 1,
+          pageSize: 100,
         },
         appKey,
         appSecret,
       );
 
-      if (data?.success) {
-        const list = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
-        this.logger.log(`Solplanet: ${list.length} planta(s) encontrada(s).`);
-        return list;
+      if (res && res.data && res.data.result && Array.isArray(res.data.result)) {
+        this.logger.log(`Solplanet: ${res.data.result.length} usina(s) encontrada(s) via getPlanListPro.`);
+        return res.data.result;
       }
 
-      this.logger.warn(`Solplanet listPlants: resposta sem sucesso: ${JSON.stringify(data)}`);
       return [];
-    } catch (error: any) {
-      this.logger.error(`Erro ao listar plantas Solplanet: ${error.message}`);
+    } catch (err: any) {
+      this.logger.error(`Erro ao listar plantas Solplanet: ${err.message}`);
       return [];
-    }
-  }
-
-  /**
-   * Descobre plantas e dispositivos Solplanet via API Pro.
-   *
-   * ATENÇÃO: NÃO há fallback de dados fictícios. Se a API falhar, retorna
-   * resultado vazio com o erro real para diagnóstico correto.
-   */
-  async discoverSolplanetPlants(
-    appKey: string,
-    appSecret: string,
-    token?: string,
-    apiKey?: string,
-  ): Promise<SolplanetDiscoveryResult> {
-    const effectiveApiKey = apiKey || appSecret;
-
-    try {
-      const plantList = await this.listPlants(appKey, appSecret, token, apiKey);
-
-      if (plantList && plantList.length > 0) {
-        const plants = plantList.map(p => ({
-          plantId: p.pid || p.id || p.plantId || String(Math.floor(Math.random() * 10000)),
-          name: p.name || p.pname || `Usina Solplanet ${p.pid || ''}`,
-          peakPower: p.peakPower || p.capacity || '0',
-          city: p.city || '',
-          createDate: p.createDate || new Date().toISOString(),
-          gpsLatitude: p.lat || null,
-          gpsLongitude: p.lng || null,
-        }));
-
-        const devices: any[] = [];
-        for (const p of plantList) {
-          const snList = p.snList || p.inverterList || [];
-          if (Array.isArray(snList) && snList.length > 0) {
-            snList.forEach((snObj: any) => {
-              const sn = typeof snObj === 'string' ? snObj : (snObj.sn || snObj.isno);
-              if (sn) {
-                devices.push({
-                  deviceSn: sn,
-                  plantId: p.pid || p.id || '',
-                  plantName: p.name || p.pname || 'Usina Solplanet',
-                  model: snObj.model || 'Solplanet ASW Series',
-                  status: 1,
-                });
-              }
-            });
-          } else if (p.sn || p.isno) {
-            devices.push({
-              deviceSn: p.sn || p.isno,
-              plantId: p.pid || p.id || '',
-              plantName: p.name || p.pname || 'Usina Solplanet',
-              model: 'Solplanet ASW Series',
-              status: 1,
-            });
-          }
-        }
-
-        return { totalPlants: plants.length, totalDevices: devices.length, plants, devices };
-      }
-
-      // API retornou lista vazia — pode ser conta sem liberação
-      return {
-        totalPlants: 0,
-        totalDevices: 0,
-        plants: [],
-        devices: [],
-        error: 'A API Solplanet retornou lista vazia. Verifique se a conta tem acesso à API Pro. ' +
-               'Se necessário, solicite liberação em: service.latam@solplanet.net',
-      };
-    } catch (e: any) {
-      this.logger.error(`Erro em discoverSolplanetPlants: ${e.message}`);
-      return {
-        totalPlants: 0,
-        totalDevices: 0,
-        plants: [],
-        devices: [],
-        error: e.message,
-      };
     }
   }
 
   /**
    * Diagnóstico completo da API Solplanet.
-   * Retorna o JSON bruto de cada endpoint para inspeção e depuração.
    */
   async diagnose(appKey: string, appSecret: string, token?: string, apiKey?: string): Promise<{
     credentials: any;
     endpoints: { endpoint: string; host: string; status: number | null; headers?: any; rawResponse: any; error?: string }[];
     recommendation: string;
   }> {
-    const effectiveApiKey = apiKey || appSecret;
+    const effectiveToken = token || process.env.SOLPLANET_TOKEN || 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09';
+    const effectiveAppKey = appKey || process.env.SOLPLANET_APP_KEY || '205024856';
+    const effectiveAppSecret = appSecret || process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
+
     const endpoints = [
       {
         path: '/pro/getPlanListPro',
-        params: { apikey: effectiveApiKey, ...(token ? { token } : {}) },
+        params: { token: effectiveToken, order: 0, pageNum: 1, pageSize: 10 },
         label: 'Lista de Plantas (getPlanListPro)',
-      },
-      {
-        path: '/pro/getInverterOverviewPro',
-        params: { apikey: effectiveApiKey, isnos: 'TEST_SN', ...(token ? { token } : {}) },
-        label: 'Overview Inversor (getInverterOverviewPro)',
       },
     ];
 
@@ -391,7 +185,7 @@ export class SolplanetService {
 
     for (const ep of endpoints) {
       const endpointStr = this.buildEndpoint(ep.path, ep.params as any);
-      const headers = this.generateSignature(endpointStr, appKey, appSecret);
+      const headers = this.generateSignature(endpointStr, effectiveAppKey, effectiveAppSecret);
 
       for (const host of SOLPLANET_HOSTS) {
         const url = `${host}${endpointStr}`;
@@ -412,7 +206,7 @@ export class SolplanetService {
             },
             rawResponse: response.data,
           });
-          break; // Usa o primeiro host que responder (qualquer resposta)
+          break;
         } catch (err: any) {
           results.push({
             endpoint: ep.label,
@@ -429,32 +223,246 @@ export class SolplanetService {
       }
     }
 
-    // Analisa os resultados para dar recomendação
-    const hasAuth = results.some(r => r.rawResponse?.success === true || r.status === 200 && !r.error);
-    const hasAppKeyError = results.some(r =>
-      r.headers?.['x-ca-error-message']?.toLowerCase().includes('appkey') ||
-      r.headers?.['x-ca-error-message']?.toLowerCase().includes('invalid') ||
-      r.rawResponse?.errorMsg?.toLowerCase().includes('appkey')
-    );
-
-    let recommendation = '';
-    if (hasAuth) {
-      recommendation = '✅ Autenticação OK. Se a lista de plantas está vazia, solicite liberação da interface em service.latam@solplanet.net';
-    } else if (hasAppKeyError) {
-      recommendation = '❌ Erro de AppKey inválida. Verifique se appKey = ID da conta (ex: 205024856) e appSecret = API Key correta.';
-    } else {
-      recommendation = '⚠️ Não foi possível conectar. Verifique conectividade e credenciais. Se o erro persistir, contate service.latam@solplanet.net solicitando liberação de API Pro.';
-    }
+    const hasSuccess = results.some(r => r.status === 200 && r.rawResponse?.status === 200);
 
     return {
       credentials: {
-        appKey,
-        appSecretPreview: appSecret ? `${appSecret.substring(0, 6)}...${appSecret.slice(-4)}` : null,
-        token: token ? `${token.substring(0, 6)}...` : null,
-        apiKey: apiKey ? `${apiKey.substring(0, 6)}...` : null,
+        appKey: effectiveAppKey,
+        appSecretPreview: effectiveAppSecret ? `${effectiveAppSecret.substring(0, 6)}...` : null,
+        token: effectiveToken ? `${effectiveToken.substring(0, 6)}...` : null,
       },
       endpoints: results,
-      recommendation,
+      recommendation: hasSuccess
+        ? '✅ Conexão com a Solplanet Cloud (Singapore Cluster) estabelecida com sucesso!'
+        : '⚠️ Verifique suas credenciais de acesso da API Solplanet.',
     };
   }
+
+  /**
+   * Lista dispositivos/inversores de uma planta pelo apikey (NMI) da usina.
+   */
+  async listDevicesForPlant(
+    plantApiKey: string,
+    appKey: string,
+    appSecret: string,
+    token: string,
+  ): Promise<any[]> {
+    try {
+      const res = await this.makeRequest(
+        '/pro/getDeviceListPro',
+        {
+          apikey: plantApiKey,
+          token,
+        },
+        appKey,
+        appSecret,
+      );
+
+      if (res && res.data && Array.isArray(res.data)) {
+        return res.data;
+      }
+      return [];
+    } catch (err: any) {
+      this.logger.debug(`Erro em getDeviceListPro para apikey ${plantApiKey}: ${err.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Descobre todas as usinas e todos os inversores da Solplanet.
+   */
+  async discoverSolplanetPlants(
+    appKey: string,
+    appSecret: string,
+    token?: string,
+    apiKey?: string,
+  ): Promise<SolplanetDiscoveryResult> {
+    const effectiveToken = token || process.env.SOLPLANET_TOKEN || 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09';
+    const effectiveAppKey = appKey || process.env.SOLPLANET_APP_KEY || '205024856';
+    const effectiveAppSecret = appSecret || process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
+
+    try {
+      const rawPlants = await this.listPlants(effectiveAppKey, effectiveAppSecret, effectiveToken);
+
+      if (!rawPlants || rawPlants.length === 0) {
+        return {
+          totalPlants: 0,
+          totalDevices: 0,
+          plants: [],
+          devices: [],
+          error: 'Nenhuma usina encontrada na API Solplanet. Verifique as credenciais da conta.',
+        };
+      }
+
+      const plants: any[] = [];
+      const devices: any[] = [];
+
+      for (const p of rawPlants) {
+        const plantId = p.apikey || p.pid || p.id || '';
+        const plantName = p.name || `Usina Solplanet ${plantId}`;
+        const peakPower = parseFloat(p.totalpower || '0');
+
+        const plantObj = {
+          plantId,
+          apikey: p.apikey,
+          name: plantName,
+          peakPower: peakPower > 100 ? peakPower / 1000 : peakPower, // Se vier em Watts (ex: 6000W -> 6.0kW)
+          city: p.city || p.position || 'Tibau',
+          state: 'RN',
+          country: p.country ? 'Brasil' : 'Brasil',
+          createDate: p.createdt || new Date().toISOString(),
+          gpsLatitude: p.wd ? parseFloat(p.wd) : null,
+          gpsLongitude: p.jd ? parseFloat(p.jd) : null,
+          etoday: p.etoday !== undefined ? parseFloat(p.etoday) : null,
+          etotal: p.etotal !== undefined ? parseFloat(p.etotal) : null,
+          status: p.status === 1 ? 'ONLINE' : 'OFFLINE',
+        };
+        plants.push(plantObj);
+
+        // Busca dispositivos (inversores / dataloggers) da usina
+        if (p.apikey) {
+          const devList = await this.listDevicesForPlant(p.apikey, effectiveAppKey, effectiveAppSecret, effectiveToken);
+          let foundInverters = false;
+
+          for (const d of devList) {
+            if (d.inverters && Array.isArray(d.inverters)) {
+              for (const inv of d.inverters) {
+                if (inv.isn) {
+                  foundInverters = true;
+                  devices.push({
+                    deviceSn: inv.isn,
+                    dataloggerSn: d.psn,
+                    plantId: p.apikey,
+                    plantName: plantName,
+                    model: 'Solplanet ASW Inverter',
+                    status: inv.istate === 1 ? 'ONLINE' : 'OFFLINE',
+                  });
+                }
+              }
+            }
+          }
+
+          // Se não encontrou inversores em getDeviceListPro, cria referência pela própria usina
+          if (!foundInverters) {
+            devices.push({
+              deviceSn: p.apikey,
+              plantId: p.apikey,
+              plantName: plantName,
+              model: 'Solplanet Cloud Station',
+              status: p.status === 1 ? 'ONLINE' : 'OFFLINE',
+            });
+          }
+        }
+      }
+
+      return {
+        totalPlants: plants.length,
+        totalDevices: devices.length,
+        plants,
+        devices,
+      };
+    } catch (e: any) {
+      this.logger.error(`Erro em discoverSolplanetPlants: ${e.message}`);
+      return {
+        totalPlants: 0,
+        totalDevices: 0,
+        plants: [],
+        devices: [],
+        error: e.message,
+      };
+    }
+  }
+
+  /**
+   * Lê telemetria em tempo real de um inversor ou usina Solplanet.
+   */
+  async readUsinaFromCloud(
+    identifier: string, // SN do inversor OU apikey da usina
+    appKey: string,
+    appSecret: string,
+    token?: string,
+    apiKey?: string,
+  ): Promise<SolplanetReading | null> {
+    if (!identifier) return null;
+
+    const effectiveToken = token || process.env.SOLPLANET_TOKEN || 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09';
+    const effectiveAppKey = appKey || process.env.SOLPLANET_APP_KEY || '205024856';
+    const effectiveAppSecret = appSecret || process.env.SOLPLANET_API_KEY || 'QT3qSt0ntxTI8JminCull8p2066zCDnZ';
+
+    try {
+      // 1. Tenta ler telemetria em tempo real por SN do inversor via getLastTsDataPro
+      const tsData = await this.makeRequest(
+        '/pro/getLastTsDataPro',
+        {
+          isnos: identifier,
+          token: effectiveToken,
+        },
+        effectiveAppKey,
+        effectiveAppSecret,
+      ).catch(() => null);
+
+      if (tsData && tsData.status === 200 && tsData.data && Array.isArray(tsData.data) && tsData.data.length > 0) {
+        const dev = tsData.data[0];
+        const rawPac = parseFloat(dev.pac || '0');
+        const powerKw = rawPac > 0 ? (rawPac > 100 ? rawPac / 1000 : rawPac) : 0;
+        const rawEtd = parseFloat(dev.etd || '0');
+        const etodayKwh = rawEtd > 0 ? rawEtd / 10 : 0; // unidade: 0.1 kWh
+        const rawEto = parseFloat(dev.eto || '0');
+        const etotalKwh = rawEto > 0 ? rawEto / 10 : 0; // unidade: 0.1 kWh
+        const rawTemp = parseFloat(dev.cf || dev.tu || '0');
+        const temp = rawTemp > 0 && rawTemp < 2000 ? rawTemp / 10 : null; // unidade: 0.1 °C
+
+        return {
+          powerNow: powerKw,
+          generationToday: etodayKwh,
+          generationTotal: etotalKwh,
+          temperature: temp,
+          status: (dev.currentState === 1 || dev.stu === '1' || powerKw > 0 || etodayKwh > 0) ? 'ONLINE' : 'OFFLINE',
+        };
+      }
+
+      // 2. Tenta ler dados da usina por apikey (NMI) via getPlantOverviewPro
+      const overview = await this.makeRequest(
+        '/pro/getPlantOverviewPro',
+        {
+          apikey: identifier,
+          token: effectiveToken,
+        },
+        effectiveAppKey,
+        effectiveAppSecret,
+      ).catch(() => null);
+
+      if (overview && overview.status === 200 && overview.data) {
+        const d = overview.data;
+        let powerKw = 0;
+        if (d.Power) {
+          const val = parseFloat(d.Power.value || '0');
+          powerKw = d.Power.unit === 'W' ? val / 1000 : val;
+        }
+
+        let etodayKwh = 0;
+        if (d['E-Today']) {
+          etodayKwh = parseFloat(d['E-Today'].value || '0');
+        }
+
+        let etotalKwh = 0;
+        if (d['E-Total']) {
+          const val = parseFloat(d['E-Total'].value || '0');
+          etotalKwh = d['E-Total'].unit === 'MWh' ? val * 1000 : val;
+        }
+
+        return {
+          powerNow: powerKw,
+          generationToday: etodayKwh,
+          generationTotal: etotalKwh,
+          status: (d.status === '1' || d.status === 1 || powerKw > 0 || etodayKwh > 0) ? 'ONLINE' : 'OFFLINE',
+        };
+      }
+    } catch (err: any) {
+      this.logger.error(`Erro ao ler telemetria Solplanet (${identifier}): ${err.message}`);
+    }
+
+    return null;
+  }
 }
+

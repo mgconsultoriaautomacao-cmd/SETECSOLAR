@@ -1520,11 +1520,12 @@ export class SolarmanService implements OnModuleInit {
       const deviceSn = dev.deviceSn;
       const usinaName = dev.plantName ? `${dev.plantName}` : `Solplanet ${deviceSn}`;
 
-      const plant = discovery.plants.find(p => p.plantId === dev.plantId) || discovery.plants[0];
+      const plant = discovery.plants.find(p => p.plantId === dev.plantId || p.apikey === dev.plantId) || discovery.plants[0];
+      const cap = parseFloat(plant?.peakPower) || 7.5;
 
       const existing = existingUsinas.find(u =>
-        u.datalogger === deviceSn ||
-        u.datalogger.includes(deviceSn) ||
+        (deviceSn && (u.datalogger === deviceSn || u.datalogger.includes(deviceSn))) ||
+        (plant?.apikey && u.datalogger === plant.apikey) ||
         u.name === usinaName
       );
 
@@ -1533,16 +1534,21 @@ export class SolarmanService implements OnModuleInit {
           const plantClientId = await getOrCreateClientForPlant(plant?.name || usinaName);
           await this.dbUpdateUsina(existing.id, {
             clientId: plantClientId,
-            datalogger: deviceSn,
+            datalogger: deviceSn || plant?.apikey || existing.datalogger,
             dataloggerSupplierId: solplanetSupplier?.id,
+            capacityKwp: cap || existing.capacityKwp,
+            inverterCapacity: cap || existing.inverterCapacity,
             gpsLatitude: plant?.gpsLatitude || existing.gpsLatitude || null,
             gpsLongitude: plant?.gpsLongitude || existing.gpsLongitude || null,
+            city: plant?.city || existing.city || 'Tibau',
+            state: plant?.state || existing.state || 'RN',
+            status: dev.status === 1 || dev.status === 'ONLINE' ? 'ONLINE' : (existing.status || 'ONLINE'),
           });
           result.updated++;
-          result.details.push({ name: existing.name, deviceSn, action: 'Atualizada (Solplanet Cloud)' });
+          result.details.push({ name: existing.name, deviceSn: deviceSn || plant?.apikey, action: 'Atualizada (Solplanet Cloud)' });
         } catch (e) {
           result.skipped++;
-          result.details.push({ name: existing.name, deviceSn, action: 'Já existe — mantida' });
+          result.details.push({ name: existing.name, deviceSn: deviceSn || plant?.apikey, action: 'Já existe — mantida' });
         }
         continue;
       }
@@ -1552,26 +1558,28 @@ export class SolarmanService implements OnModuleInit {
         await this.dbCreateUsina({
           name: usinaName,
           clientId: plantClientId,
-          capacityKwp: parseFloat(plant?.peakPower) || 12.5,
-          inverterCapacity: parseFloat(plant?.peakPower) || 10.0,
-          moduleCount: 24,
+          capacityKwp: cap,
+          inverterCapacity: cap,
+          moduleCount: Math.round(cap * 2),
           manufacturer: 'Solplanet / AISWEI',
           model: dev.model || 'Solplanet ASW Series',
-          utilityCompany: 'CPFL',
-          estimatedKwh: (parseFloat(plant?.peakPower) || 12.5) * 130,
-          paybackYears: 3.8,
-          installationDate: new Date(),
-          status: 'ONLINE',
-          datalogger: deviceSn,
-          city: plant?.city || 'Campinas - SP',
-          state: 'SP',
-          address: 'Instalação Solar Solplanet',
+          utilityCompany: 'Cosern / Neoenergia',
+          estimatedKwh: cap * 135,
+          paybackYears: 3.5,
+          installationDate: plant?.createDate ? new Date(plant.createDate) : new Date(),
+          status: dev.status === 1 || dev.status === 'ONLINE' ? 'ONLINE' : 'ONLINE',
+          datalogger: deviceSn || plant?.apikey,
+          city: plant?.city || 'Tibau',
+          state: plant?.state || 'RN',
+          address: plant?.position || 'Instalação Solar Solplanet',
           dataloggerSupplierId: solplanetSupplier?.id,
-          gpsLatitude: plant?.gpsLatitude || -22.9056,
-          gpsLongitude: plant?.gpsLongitude || -47.0608,
+          gpsLatitude: plant?.gpsLatitude || null,
+          gpsLongitude: plant?.gpsLongitude || null,
+          generationToday: plant?.etoday !== null && plant?.etoday !== undefined ? plant.etoday : undefined,
+          generationTotal: plant?.etotal !== null && plant?.etotal !== undefined ? plant.etotal : undefined,
         });
         result.created++;
-        result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
+        result.details.push({ name: usinaName, deviceSn: deviceSn || plant?.apikey, action: 'Criada' });
       } catch (err: any) {
         result.errors.push(`Erro ao criar usina Solplanet "${usinaName}": ${err.message}`);
       }
