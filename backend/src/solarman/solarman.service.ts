@@ -1662,6 +1662,7 @@ export class SolarmanService implements OnModuleInit {
     }
 
     const existingUsinas = await this.dbGetUsinas();
+    const processedDevices = new Set<string>();
 
     const getOrCreateClient = async (name: string): Promise<string> => {
       if (clientId) return clientId;
@@ -1670,7 +1671,7 @@ export class SolarmanService implements OnModuleInit {
 
       const created = await this.dbCreateClient({
         name,
-        email: `solis_${Date.now()}@local`,
+        email: `solis_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
         document: '00000000000',
         phone: '00000000000',
         whatsapp: '00000000000',
@@ -1683,10 +1684,154 @@ export class SolarmanService implements OnModuleInit {
       return created?.id || '';
     };
 
+    // 1. Itera por todas as Plantas (Estações) encontradas na Solis
+    for (const plant of discovery.plants) {
+      const plantDevs = discovery.devices.filter(d => 
+        d.stationId === plant.stationId || 
+        (d.stationName && d.stationName.toLowerCase() === plant.name.toLowerCase())
+      );
+
+      if (plantDevs.length > 0) {
+        // Possui inversor(es) específico(s)
+        for (const dev of plantDevs) {
+          const deviceSn = dev.deviceSn;
+          processedDevices.add(deviceSn);
+          const usinaName = plantDevs.length > 1 ? `${plant.name} — ${deviceSn}` : plant.name;
+
+          const existing = existingUsinas.find(u =>
+            (deviceSn && (u.datalogger === deviceSn || u.datalogger.includes(deviceSn))) ||
+            (plant.stationId && u.datalogger === plant.stationId) ||
+            u.name === usinaName ||
+            u.name === plant.name
+          );
+
+          if (existing) {
+            try {
+              const clientTargetId = await getOrCreateClient(plant.name);
+              await this.dbUpdateUsina(existing.id, {
+                clientId: clientTargetId,
+                datalogger: deviceSn || existing.datalogger,
+                dataloggerSupplierId: solisSupplier?.id,
+                capacityKwp: dev.powerKw || plant.capacityKwp || existing.capacityKwp || 8.0,
+                inverterCapacity: dev.powerKw || plant.capacityKwp || existing.inverterCapacity || 8.0,
+                gpsLatitude: plant.latitude || existing.gpsLatitude || null,
+                gpsLongitude: plant.longitude || existing.gpsLongitude || null,
+                city: plant.city || existing.city || 'Tibau',
+                state: plant.region || existing.state || 'RN',
+                address: plant.address || existing.address || 'Instalação Solis',
+                status: 'ONLINE',
+              });
+              result.updated++;
+              result.details.push({ name: existing.name, deviceSn: deviceSn || existing.datalogger, action: 'Atualizada (SolisCloud)' });
+            } catch (e) {
+              result.skipped++;
+              result.details.push({ name: existing.name, deviceSn: deviceSn || existing.datalogger, action: 'Já existe' });
+            }
+          } else {
+            try {
+              const clientTargetId = await getOrCreateClient(plant.name);
+              const cap = dev.powerKw || plant.capacityKwp || 8.0;
+
+              await this.dbCreateUsina({
+                name: usinaName,
+                clientId: clientTargetId,
+                capacityKwp: cap,
+                inverterCapacity: cap,
+                moduleCount: Math.round(cap * 2),
+                manufacturer: 'Solis',
+                model: dev.model || 'Solis-1P8K-5G Brazil',
+                utilityCompany: 'Cosern / Neoenergia',
+                estimatedKwh: cap * 135,
+                paybackYears: 3.5,
+                installationDate: new Date(),
+                status: dev.status || 'ONLINE',
+                datalogger: deviceSn || plant.stationId,
+                city: plant.city || 'Tibau',
+                state: plant.region || 'RN',
+                address: plant.address || 'Instalação Solis',
+                dataloggerSupplierId: solisSupplier?.id,
+                gpsLatitude: plant.latitude || null,
+                gpsLongitude: plant.longitude || null,
+              });
+              result.created++;
+              result.details.push({ name: usinaName, deviceSn: deviceSn || plant.stationId, action: 'Criada' });
+            } catch (err: any) {
+              result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
+            }
+          }
+        }
+      } else {
+        // Estação Solis sem inversor separado retornado na listagem (cadastra a própria estação)
+        const usinaName = plant.name;
+        const stationIdentifier = plant.stationId;
+
+        const existing = existingUsinas.find(u =>
+          (stationIdentifier && (u.datalogger === stationIdentifier || u.datalogger.includes(stationIdentifier))) ||
+          u.name === usinaName
+        );
+
+        if (existing) {
+          try {
+            const clientTargetId = await getOrCreateClient(plant.name);
+            await this.dbUpdateUsina(existing.id, {
+              clientId: clientTargetId,
+              datalogger: stationIdentifier || existing.datalogger,
+              dataloggerSupplierId: solisSupplier?.id,
+              capacityKwp: plant.capacityKwp || existing.capacityKwp || 8.0,
+              inverterCapacity: plant.capacityKwp || existing.inverterCapacity || 8.0,
+              gpsLatitude: plant.latitude || existing.gpsLatitude || null,
+              gpsLongitude: plant.longitude || existing.gpsLongitude || null,
+              city: plant.city || existing.city || 'Tibau',
+              state: plant.region || existing.state || 'RN',
+              address: plant.address || existing.address || 'Instalação Solis',
+              status: 'ONLINE',
+            });
+            result.updated++;
+            result.details.push({ name: existing.name, deviceSn: stationIdentifier, action: 'Atualizada (SolisCloud)' });
+          } catch (e) {
+            result.skipped++;
+            result.details.push({ name: existing.name, deviceSn: stationIdentifier, action: 'Já existe' });
+          }
+        } else {
+          try {
+            const clientTargetId = await getOrCreateClient(plant.name);
+            const cap = plant.capacityKwp || 8.0;
+
+            await this.dbCreateUsina({
+              name: usinaName,
+              clientId: clientTargetId,
+              capacityKwp: cap,
+              inverterCapacity: cap,
+              moduleCount: Math.round(cap * 2),
+              manufacturer: 'Solis',
+              model: 'Solis Cloud Station',
+              utilityCompany: 'Cosern / Neoenergia',
+              estimatedKwh: cap * 135,
+              paybackYears: 3.5,
+              installationDate: new Date(),
+              status: 'ONLINE',
+              datalogger: stationIdentifier,
+              city: plant.city || 'Tibau',
+              state: plant.region || 'RN',
+              address: plant.address || 'Instalação Solis',
+              dataloggerSupplierId: solisSupplier?.id,
+              gpsLatitude: plant.latitude || null,
+              gpsLongitude: plant.longitude || null,
+            });
+            result.created++;
+            result.details.push({ name: usinaName, deviceSn: stationIdentifier, action: 'Criada' });
+          } catch (err: any) {
+            result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
+          }
+        }
+      }
+    }
+
+    // 2. Processa dispositivos avulsos que não foram associados a nenhuma estação processada acima
     for (const dev of discovery.devices) {
+      if (processedDevices.has(dev.deviceSn)) continue;
       const deviceSn = dev.deviceSn;
       const usinaName = dev.stationName ? `${dev.stationName} — ${deviceSn}` : `Solis ${deviceSn}`;
-      const plant = discovery.plants.find(p => p.stationId === dev.stationId) || discovery.plants[0];
 
       const existing = existingUsinas.find(u =>
         u.datalogger === deviceSn ||
@@ -1696,13 +1841,11 @@ export class SolarmanService implements OnModuleInit {
 
       if (existing) {
         try {
-          const clientTargetId = await getOrCreateClient(plant?.name || dev.stationName || 'Cliente Solis');
+          const clientTargetId = await getOrCreateClient(dev.stationName || 'Cliente Solis');
           await this.dbUpdateUsina(existing.id, {
             clientId: clientTargetId,
             datalogger: deviceSn,
             dataloggerSupplierId: solisSupplier?.id,
-            gpsLatitude: plant?.latitude || existing.gpsLatitude || null,
-            gpsLongitude: plant?.longitude || existing.gpsLongitude || null,
             status: 'ONLINE',
           });
           result.updated++;
@@ -1711,38 +1854,37 @@ export class SolarmanService implements OnModuleInit {
           result.skipped++;
           result.details.push({ name: existing.name, deviceSn, action: 'Já existe' });
         }
-        continue;
-      }
+      } else {
+        try {
+          const clientTargetId = await getOrCreateClient(dev.stationName || 'Cliente Solis');
+          const cap = dev.powerKw || 8.0;
 
-      try {
-        const clientTargetId = await getOrCreateClient(plant?.name || dev.stationName || 'Cliente Solis');
-        const cap = dev.powerKw || plant?.capacityKwp || 8.0;
-
-        await this.dbCreateUsina({
-          name: usinaName,
-          clientId: clientTargetId,
-          capacityKwp: cap,
-          inverterCapacity: cap,
-          moduleCount: Math.round(cap * 2),
-          manufacturer: 'Solis',
-          model: dev.model || 'Solis-1P8K-5G Brazil',
-          utilityCompany: 'Cosern / Neoenergia',
-          estimatedKwh: cap * 135,
-          paybackYears: 3.5,
-          installationDate: new Date(),
-          status: 'ONLINE',
-          datalogger: deviceSn,
-          city: plant?.city || 'Tibau',
-          state: plant?.region || 'RN',
-          address: plant?.address || 'Instalação Solis',
-          dataloggerSupplierId: solisSupplier?.id,
-          gpsLatitude: plant?.latitude || null,
-          gpsLongitude: plant?.longitude || null,
-        });
-        result.created++;
-        result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
-      } catch (err: any) {
-        result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
+          await this.dbCreateUsina({
+            name: usinaName,
+            clientId: clientTargetId,
+            capacityKwp: cap,
+            inverterCapacity: cap,
+            moduleCount: Math.round(cap * 2),
+            manufacturer: 'Solis',
+            model: dev.model || 'Solis-1P8K-5G Brazil',
+            utilityCompany: 'Cosern / Neoenergia',
+            estimatedKwh: cap * 135,
+            paybackYears: 3.5,
+            installationDate: new Date(),
+            status: 'ONLINE',
+            datalogger: deviceSn,
+            city: 'Tibau',
+            state: 'RN',
+            address: 'Instalação Solis',
+            dataloggerSupplierId: solisSupplier?.id,
+            gpsLatitude: null,
+            gpsLongitude: null,
+          });
+          result.created++;
+          result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
+        } catch (err: any) {
+          result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
+        }
       }
     }
 
