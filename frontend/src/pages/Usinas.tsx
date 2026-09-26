@@ -1083,6 +1083,7 @@ export default function Usinas() {
                     onChange={e => handleTypeChange(e.target.value)}
                   >
                     <MenuItem value="GROWATT_CLOUD">Growatt OpenAPI Cloud</MenuItem>
+                    <MenuItem value="GOODWE_CLOUD">GoodWe SEMS Portal API</MenuItem>
                     <MenuItem value="SOLIS_CLOUD">SolisCloud Open API (Ginlong Solis)</MenuItem>
                     <MenuItem value="SOLARMAN_CLOUD">Solarman OpenAPI Cloud</MenuItem>
                     <MenuItem value="SOLPLANET_CLOUD">Solplanet Cloud API</MenuItem>
@@ -1128,6 +1129,42 @@ export default function Usinas() {
                   />
                 </Grid>
               )}
+
+              {supplierForm.type === 'GOODWE_CLOUD' && (
+                <>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      label="Código Corporativo / E-mail (GoodWe)"
+                      fullWidth
+                      value={supplierForm.username || supplierForm.appId}
+                      onChange={e => setSupplierForm({ ...supplierForm, username: e.target.value, appId: e.target.value })}
+                      placeholder="Ex: G10034513"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      label="Client ID (GoodWe)"
+                      fullWidth
+                      value={supplierForm.appId}
+                      onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
+                      placeholder="Ex: fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      label="Client Secret (GoodWe)"
+                      fullWidth
+                      value={supplierForm.appSecret || supplierForm.token}
+                      onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value, token: e.target.value })}
+                      placeholder="Ex: zFt7CdQo2bjANAFUjrPwYtRm9..."
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                </>
+              )}
+
 
 
               {supplierForm.type === 'SOLARMAN_CLOUD' && (

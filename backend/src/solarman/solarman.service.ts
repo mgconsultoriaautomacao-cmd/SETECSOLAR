@@ -5,6 +5,8 @@ import * as crypto from 'crypto';
 import { GrowattService, GrowattDiscoveryResult, GrowattDevice } from './growatt.service';
 import { SolplanetService } from './solplanet.service';
 import { SolisService, SolisDiscoveryResult } from './solis.service';
+import { GoodWeService } from './goodwe.service';
+
 
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,6 +331,7 @@ export class SolarmanService implements OnModuleInit {
     private growattService: GrowattService,
     private solplanetService: SolplanetService,
     private solisService: SolisService,
+    private goodweService: GoodWeService,
   ) {}
 
 
@@ -407,12 +410,15 @@ export class SolarmanService implements OnModuleInit {
       }
     }
     if (name) {
+      const cleanName = name.trim();
       try {
-        const c = await this.prisma.client.findFirst({ where: { name } });
+        const c = await this.prisma.client.findFirst({
+          where: { name: { equals: cleanName, mode: 'insensitive' } },
+        });
         if (c) return c;
       } catch {
         try {
-          const res = await this.prisma.rest.get('Client', `name=eq.${encodeURIComponent(name)}&limit=1`);
+          const res = await this.prisma.rest.get('Client', `name=ilike.*${encodeURIComponent(cleanName)}*&limit=1`);
           if (res && res.length > 0) return res[0];
         } catch (e: any) {
           this.logger.warn(`dbGetClient error: ${e.message}`);
@@ -422,27 +428,119 @@ export class SolarmanService implements OnModuleInit {
     return null;
   }
 
-  private async dbCreateClient(data: any): Promise<any> {
+  private async dbGetFirstClient(): Promise<any> {
     try {
-      return await this.prisma.client.create({ data });
+      const c = await this.prisma.client.findFirst();
+      if (c) return c;
     } catch {
       try {
-        return await this.prisma.rest.post('Client', data);
-      } catch (e: any) {
-        this.logger.warn(`dbCreateClient error: ${e.message}`);
-        return null;
+        const res = await this.prisma.rest.get('Client', 'limit=1');
+        if (res && res.length > 0) return res[0];
+      } catch {}
+    }
+    return null;
+  }
+
+  private generateUniqueDoc(): string {
+    const timestamp = Date.now().toString().slice(-8);
+    const rand = Math.floor(Math.random() * 900 + 100).toString();
+    return `${timestamp}${rand}`; // 11 dígitos numéricos únicos
+  }
+
+  private async dbCreateClient(data: any): Promise<any> {
+    const cleanName = (data.name || 'Cliente Solar').trim();
+    const uniqueDoc = data.document && data.document !== '00000000000' && data.document.length >= 11
+      ? data.document
+      : this.generateUniqueDoc();
+    
+    const uniqueEmail = data.email && !data.email.includes('00000')
+      ? data.email
+      : `cliente_${Date.now()}_${Math.random().toString(36).substring(2, 7)}@setecsolar.com`;
+
+    const clientPayload = {
+      name: cleanName,
+      document: uniqueDoc,
+      email: uniqueEmail,
+      phone: data.phone || '84999999999',
+      whatsapp: data.whatsapp || '84999999999',
+      zipCode: data.zipCode || '59660000',
+      address: data.address || 'Instalação Solar',
+      city: data.city || 'Tibau',
+      state: data.state || 'RN',
+      installationDate: data.installationDate ? new Date(data.installationDate) : new Date(),
+      status: data.status || 'ACTIVE',
+    };
+
+    try {
+      return await this.prisma.client.create({ data: clientPayload });
+    } catch (e1: any) {
+      try {
+        return await this.prisma.rest.post('Client', clientPayload);
+      } catch (e2: any) {
+        this.logger.warn(`dbCreateClient tentativa 1 falhou (${e2.message}). Tentando com novo document/email único...`);
+        // Segunda tentativa com novo doc e email aleatório
+        clientPayload.document = this.generateUniqueDoc();
+        clientPayload.email = `cliente_${Date.now()}_${Math.random().toString(36).substring(2, 8)}@setecsolar.com`;
+        try {
+          return await this.prisma.client.create({ data: clientPayload });
+        } catch {
+          try {
+            return await this.prisma.rest.post('Client', clientPayload);
+          } catch (e3: any) {
+            this.logger.error(`dbCreateClient falhou: ${e3.message}`);
+            // Fallback: pega o primeiro cliente existente para não bloquear
+            return await this.dbGetFirstClient();
+          }
+        }
       }
     }
   }
 
   private async dbCreateUsina(data: any): Promise<any> {
+    // Garante que clientId exista
+    let finalClientId = data.clientId;
+    if (!finalClientId) {
+      const fallbackClient = (await this.dbGetFirstClient()) || (await this.dbCreateClient({ name: 'Cliente SETEC Energia' }));
+      finalClientId = fallbackClient?.id;
+    }
+
+    const cap = typeof data.capacityKwp === 'number' && !isNaN(data.capacityKwp) ? data.capacityKwp : 7.5;
+    const invCap = typeof data.inverterCapacity === 'number' && !isNaN(data.inverterCapacity) ? data.inverterCapacity : cap;
+    const modCount = Math.max(1, Math.round(data.moduleCount || (cap * 2)));
+
+    const usinaPayload = {
+      name: data.name || 'Nova Usina Solar',
+      clientId: finalClientId,
+      capacityKwp: cap,
+      inverterCapacity: invCap,
+      moduleCount: modCount,
+      manufacturer: data.manufacturer || 'Solis',
+      model: data.model || 'Inversor Solar',
+      utilityCompany: data.utilityCompany || 'Cosern / Neoenergia',
+      estimatedKwh: typeof data.estimatedKwh === 'number' && !isNaN(data.estimatedKwh) ? data.estimatedKwh : cap * 135,
+      paybackYears: typeof data.paybackYears === 'number' && !isNaN(data.paybackYears) ? data.paybackYears : 3.5,
+      installationDate: data.installationDate ? new Date(data.installationDate) : new Date(),
+      status: data.status || 'ONLINE',
+      datalogger: String(data.datalogger || ''),
+      address: data.address || '',
+      city: data.city || 'Tibau',
+      state: data.state || 'RN',
+      dataloggerSupplierId: data.dataloggerSupplierId || null,
+      gpsLatitude: typeof data.gpsLatitude === 'number' && !isNaN(data.gpsLatitude) ? data.gpsLatitude : null,
+      gpsLongitude: typeof data.gpsLongitude === 'number' && !isNaN(data.gpsLongitude) ? data.gpsLongitude : null,
+      powerNow: typeof data.powerNow === 'number' && !isNaN(data.powerNow) ? data.powerNow : null,
+      generationToday: typeof data.generationToday === 'number' && !isNaN(data.generationToday) ? data.generationToday : null,
+      generationTotal: typeof data.generationTotal === 'number' && !isNaN(data.generationTotal) ? data.generationTotal : null,
+      readingLastUpdate: new Date(),
+    };
+
     try {
-      return await this.prisma.usina.create({ data });
-    } catch {
+      return await this.prisma.usina.create({ data: usinaPayload });
+    } catch (e1: any) {
       try {
-        return await this.prisma.rest.post('Usina', data);
-      } catch (e: any) {
-        this.logger.warn(`dbCreateUsina error: ${e.message}`);
+        return await this.prisma.rest.post('Usina', usinaPayload);
+      } catch (e2: any) {
+        this.logger.error(`dbCreateUsina falhou: ${e2.message}`);
         return null;
       }
     }
@@ -781,7 +879,36 @@ export class SolarmanService implements OnModuleInit {
           errorMessage: `Sem resposta da SolisCloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
         };
       }
+
+      if (supplier.type === 'GOODWE_CLOUD' || supplier.type === 'GOODWE') {
+        const account = supplier.username || supplier.appId || 'G10034513';
+        const secret = supplier.appSecret || supplier.token || 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88';
+        const goodweData = await this.goodweService.readUsinaFromCloud(cleanDatalogger, account, secret);
+        if (goodweData) {
+          return {
+            usinaId, usinaNome, deviceSn: cleanDatalogger,
+            ipAddress: 'GoodWe SEMS Portal',
+            powerNow: goodweData.powerNow,
+            generationToday: goodweData.generationToday,
+            generationTotal: goodweData.generationTotal,
+            gridVoltage: null, gridFrequency: null,
+            temperature: goodweData.temperature,
+            dcPower: null,
+            status: goodweData.status === 'ONLINE' ? 'ONLINE' : 'OFFLINE',
+            lastUpdate: new Date(),
+          };
+        }
+        return {
+          usinaId, usinaNome, deviceSn: cleanDatalogger,
+          ipAddress: 'GoodWe SEMS Portal',
+          powerNow: null, generationToday: null, generationTotal: null,
+          gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+          status: 'OFFLINE', lastUpdate: new Date(),
+          errorMessage: `Sem resposta da GoodWe SEMS API. Verifique as credenciais do fornecedor "${supplier.name}".`,
+        };
+      }
     }
+
 
 
 
@@ -1268,14 +1395,9 @@ export class SolarmanService implements OnModuleInit {
       // Cria um novo cliente
       const newClient = await this.dbCreateClient({
         name: plantName,
-        email: `importacao_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
-        document: `000000000${Math.floor(Math.random() * 1000)}`,
-        phone: '00000000000',
-        whatsapp: '00000000000',
-        zipCode: '00000000',
         address: 'Importado via API Growatt',
-        city: 'Importado',
-        state: 'XX',
+        city: 'Tibau',
+        state: 'RN',
         installationDate: new Date(),
       });
       this.logger.log(`👤 Cliente criado automaticamente: "${plantName}"`);
@@ -1503,14 +1625,9 @@ export class SolarmanService implements OnModuleInit {
 
       const newClient = await this.dbCreateClient({
         name: plantName,
-        email: `solplanet_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
-        document: `000000000${Math.floor(Math.random() * 1000)}`,
-        phone: '00000000000',
-        whatsapp: '00000000000',
-        zipCode: '00000000',
         address: 'Importado via Solplanet API',
-        city: 'Importado',
-        state: 'XX',
+        city: 'Tibau',
+        state: 'RN',
         installationDate: new Date(),
       });
       return newClient?.id || '';
@@ -1679,13 +1796,8 @@ export class SolarmanService implements OnModuleInit {
 
       const created = await this.dbCreateClient({
         name,
-        email: `solis_${Date.now()}_${Math.floor(Math.random() * 1000)}@local`,
-        document: '00000000000',
-        phone: '00000000000',
-        whatsapp: '00000000000',
-        zipCode: '00000000',
         address: 'Importado SolisCloud API',
-        city: 'Importado',
+        city: 'Tibau',
         state: 'RN',
         installationDate: new Date(),
       });

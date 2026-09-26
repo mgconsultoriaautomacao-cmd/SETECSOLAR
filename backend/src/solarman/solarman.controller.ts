@@ -2,6 +2,7 @@ import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/co
 import { SolarmanService } from './solarman.service';
 import { GrowattService } from './growatt.service';
 import { SolplanetService } from './solplanet.service';
+import { GoodWeService } from './goodwe.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoleGuard } from '../auth/role.guard';
 
@@ -12,6 +13,7 @@ export class SolarmanController {
     private readonly solarmanService: SolarmanService,
     private readonly growattService: GrowattService,
     private readonly solplanetService: SolplanetService,
+    private readonly goodweService: GoodWeService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -181,6 +183,34 @@ export class SolarmanController {
     return this.solarmanService.syncSolarmanPlants(body.clientId, body.supplierId);
   }
 
+  // ─── GoodWe SEMS Portal: Diagnóstico e Plantas ────────────────────────────
+
+  // GET /solarman/goodwe/diagnose — Diagnóstico da API GoodWe
+  @Get('goodwe/diagnose')
+  async diagnoseGoodwe(
+    @Query('account') account?: string,
+    @Query('clientId') clientId?: string,
+    @Query('clientSecret') clientSecret?: string,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    let acc = account;
+    let cId = clientId;
+    let cSecret = clientSecret;
+
+    if (supplierId) {
+      try {
+        const supplier = await this.prisma.dataloggerSupplier.findUnique({ where: { id: supplierId } });
+        if (supplier) {
+          acc = supplier.username || supplier.appId || acc;
+          cId = supplier.appId || cId;
+          cSecret = supplier.appSecret || supplier.token || cSecret;
+        }
+      } catch (e) { /* ignora */ }
+    }
+
+    return this.goodweService.diagnose(acc, cId, cSecret);
+  }
+
   // ─── Sincronização Unificada (Todos os Fornecedores Cloud) ────────────────
 
   // POST /solarman/sync-all — Sincroniza Growatt, Solis, Solplanet e Solarman de uma só vez
@@ -189,4 +219,5 @@ export class SolarmanController {
     return this.solarmanService.syncAllCloudPlants(body.clientId);
   }
 }
+
 
