@@ -26,6 +26,8 @@ import AddIcon from '@mui/icons-material/Add';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import VpnKeyIcon from '@mui/icons-material/VpnKey';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useApp, type Client } from '../context/AppContext';
 
 export default function Clientes() {
@@ -35,11 +37,15 @@ export default function Clientes() {
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [loadingCep, setLoadingCep] = useState(false);
   
+  const [openAccessModal, setOpenAccessModal] = useState(false);
+  const [selectedClientForAccess, setSelectedClientForAccess] = useState<Client | null>(null);
+
   const [clientForm, setClientForm] = useState({
     name: '',
     document: '',
     phone: '',
     email: '',
+    password: 'setec2026',
     zipCode: '',
     address: '',
     city: '',
@@ -86,6 +92,7 @@ export default function Clientes() {
       document: '',
       phone: '',
       email: '',
+      password: 'setec2026',
       zipCode: '',
       address: '',
       city: '',
@@ -102,6 +109,7 @@ export default function Clientes() {
       document: client.document,
       phone: client.phone,
       email: client.email,
+      password: (client as any).password || 'setec2026',
       zipCode: client.zipCode || '',
       address: client.address || '',
       city: client.city,
@@ -109,6 +117,11 @@ export default function Clientes() {
       installationDate: client.installationDate ? new Date(client.installationDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
     });
     setOpen(true);
+  };
+
+  const handleShowAccess = (client: Client) => {
+    setSelectedClientForAccess(client);
+    setOpenAccessModal(true);
   };
 
   const handleClose = () => setOpen(false);
@@ -217,11 +230,14 @@ export default function Clientes() {
                   />
                 </TableCell>
                 <TableCell align="center">
-                  <Box className="flex justify-center gap-2">
-                    <IconButton size="small" color="primary" onClick={() => handleOpenEdit(client)}>
+                  <Box className="flex justify-center gap-1">
+                    <IconButton size="small" color="warning" title="Credenciais do App (Login/Senha)" onClick={() => handleShowAccess(client)}>
+                      <VpnKeyIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" color="primary" title="Editar Cliente" onClick={() => handleOpenEdit(client)}>
                       <EditIcon fontSize="small" />
                     </IconButton>
-                    <IconButton size="small" color="error" onClick={() => handleOpenDelete(client.id)}>
+                    <IconButton size="small" color="error" title="Excluir Cliente" onClick={() => handleOpenDelete(client.id)}>
                       <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Box>
@@ -273,13 +289,24 @@ export default function Clientes() {
                 slotProps={{ inputLabel: { shrink: true } }}
               />
             </Grid>
-            <Grid size={12}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="E-mail"
+                label="E-mail (Login no App)"
                 fullWidth
                 value={clientForm.email}
                 onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
                 slotProps={{ inputLabel: { shrink: true } }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                label="Senha de Acesso do Cliente"
+                type="text"
+                fullWidth
+                value={clientForm.password}
+                onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
+                slotProps={{ inputLabel: { shrink: true } }}
+                helperText="Senha padrão: setec2026"
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -343,6 +370,62 @@ export default function Clientes() {
         <DialogActions className="border-t border-slate-800 p-4">
           <Button onClick={handleClose} color="inherit">Cancelar</Button>
           <Button onClick={handleSave} variant="contained" color="primary">Salvar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal Visualização de Credenciais do App do Cliente */}
+      <Dialog open={openAccessModal} onClose={() => setOpenAccessModal(false)} slotProps={{ paper: { sx: { bgcolor: '#1e293b', color: '#f8fafc', maxWidth: 500, width: '100%' } } }}>
+        <DialogTitle className="font-bold border-b border-slate-800 flex items-center gap-2">
+          <VpnKeyIcon className="text-amber-500" /> Credenciais de Acesso ao App
+        </DialogTitle>
+        <DialogContent className="pt-6 space-y-4">
+          {selectedClientForAccess && (
+            <Box className="space-y-4">
+              <Typography variant="body2" className="text-slate-300">
+                Envie os dados abaixo para o cliente <strong>{selectedClientForAccess.name}</strong> para que ele possa acessar o monitoramento solar no aplicativo:
+              </Typography>
+              
+              <Paper className="p-4 bg-slate-900 border border-slate-800 space-y-2 font-mono text-sm">
+                <div><span className="text-slate-500">Cliente:</span> <strong>{selectedClientForAccess.name}</strong></div>
+                <div><span className="text-slate-500">E-mail (Login):</span> <strong className="text-amber-400">{selectedClientForAccess.email}</strong></div>
+                <div><span className="text-slate-500">Senha:</span> <strong className="text-emerald-400">{(selectedClientForAccess as any).password || 'setec2026'}</strong></div>
+                <div><span className="text-slate-500">Link do App:</span> <strong className="text-blue-400">https://setecsolar.vercel.app</strong></div>
+              </Paper>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions className="border-t border-slate-800 p-4 flex justify-between">
+          <Button onClick={() => setOpenAccessModal(false)} color="inherit">Fechar</Button>
+          {selectedClientForAccess && (
+            <Box className="flex gap-2">
+              <Button
+                variant="outlined"
+                color="info"
+                startIcon={<ContentCopyIcon />}
+                onClick={() => {
+                  const text = `Olá ${selectedClientForAccess.name}!\n\nSeu acesso ao aplicativo de monitoramento solar da SETEC Solar já está ativo! ☀️\n\nDados de Acesso:\nE-mail: ${selectedClientForAccess.email}\nSenha: ${(selectedClientForAccess as any).password || 'setec2026'}\nAcesse por aqui: https://setecsolar.vercel.app`;
+                  navigator.clipboard.writeText(text);
+                  alert('Credenciais copiadas para a área de transferência!');
+                }}
+              >
+                Copiar
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                startIcon={<WhatsAppIcon />}
+                onClick={() => {
+                  const phoneClean = selectedClientForAccess.phone.replace(/\D/g, '');
+                  const text = encodeURIComponent(
+                    `Olá *${selectedClientForAccess.name}*!\n\nSeu acesso ao aplicativo de monitoramento solar da *SETEC Solar* já está ativo! ☀️\n\n*Dados de Acesso:*\n📧 *E-mail:* ${selectedClientForAccess.email}\n🔑 *Senha:* ${(selectedClientForAccess as any).password || 'setec2026'}\n🌐 *Acesse por aqui:* https://setecsolar.vercel.app\n\nQualquer dúvida estamos à disposição!`
+                  );
+                  window.open(`https://wa.me/55${phoneClean}?text=${text}`, '_blank');
+                }}
+              >
+                Enviar via WhatsApp
+              </Button>
+            </Box>
+          )}
         </DialogActions>
       </Dialog>
 

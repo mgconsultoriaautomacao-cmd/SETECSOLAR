@@ -17,6 +17,17 @@ import Tickets from './pages/Tickets';
 import Configuracoes from './pages/Configuracoes';
 import { Box, Typography, Button, Paper, IconButton, Chip } from '@mui/material';
 import { useApp } from './context/AppContext';
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from 'recharts';
 
 // Import Material UI Icons
 import {
@@ -60,7 +71,8 @@ import {
   Storage as StorageIcon,
   Download as DownloadIcon,
   CheckCircle as CheckCircleIcon,
-  CameraAlt as CameraAltIcon
+  CameraAlt as CameraAltIcon,
+  BarChart as BarChartIcon
 
 } from '@mui/icons-material';
 
@@ -187,7 +199,8 @@ function AppCliente() {
   const [selectedUsinaData, setSelectedUsinaData] = useState<any>(null);
 
   // States
-  const [activeTab, setActiveTab] = useState<'plantas' | 'falha' | 'servico' | 'eu'>('plantas');
+  const [activeTab, setActiveTab] = useState<'plantas' | 'graficos' | 'falha' | 'servico' | 'eu'>('plantas');
+  const [chartPeriod, setChartPeriod] = useState<'DIARIO' | 'SEMANAL' | 'MENSAL' | 'ANUAL'>('DIARIO');
   const [simulatorTheme, setSimulatorTheme] = useState<'light' | 'dark'>('light');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'ONLINE' | 'ALERT' | 'OFFLINE'>('ALL');
@@ -662,6 +675,162 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
     setActiveModal('add_plant');
   };
 
+  // Helper para gerar dados comparativos (Diário, Semanal, Mensal, Anual)
+  const getChartDataForPeriod = (usina: any, period: 'DIARIO' | 'SEMANAL' | 'MENSAL' | 'ANUAL'): any[] => {
+    const cap = usina?.capacityKwp || 5;
+    const eHoje = parseFloat(usina?.eHoje || '16.5');
+
+    if (period === 'DIARIO') {
+      return [
+        { name: '06h', power: Number((cap * 0.08).toFixed(2)) },
+        { name: '08h', power: Number((cap * 0.38).toFixed(2)) },
+        { name: '10h', power: Number((cap * 0.78).toFixed(2)) },
+        { name: '12h', power: Number((cap * 0.95).toFixed(2)) },
+        { name: '14h', power: Number((cap * 0.72).toFixed(2)) },
+        { name: '16h', power: Number((cap * 0.32).toFixed(2)) },
+        { name: '18h', power: Number((cap * 0.04).toFixed(2)) },
+      ];
+    }
+
+    if (period === 'SEMANAL') {
+      const base = eHoje > 0 ? eHoje : cap * 4.2;
+      return [
+        { name: 'Seg', geracao: Number((base * 0.92).toFixed(1)), meta: Number((cap * 4.2).toFixed(1)) },
+        { name: 'Ter', geracao: Number((base * 1.05).toFixed(1)), meta: Number((cap * 4.2).toFixed(1)) },
+        { name: 'Qua', geracao: Number((base * 0.88).toFixed(1)), meta: Number((cap * 4.2).toFixed(1)) },
+        { name: 'Qui', geracao: Number((base * 1.12).toFixed(1)), meta: Number((cap * 4.2).toFixed(1)) },
+        { name: 'Sex', geracao: Number((base * 1.02).toFixed(1)), meta: Number((cap * 4.2).toFixed(1)) },
+        { name: 'Sáb', geracao: Number((base * 0.95).toFixed(1)), meta: Number((cap * 4.2).toFixed(1)) },
+        { name: 'Dom', geracao: Number((base * 1.08).toFixed(1)), meta: Number((cap * 4.2).toFixed(1)) },
+      ];
+    }
+
+    if (period === 'MENSAL') {
+      const dayAvg = eHoje > 0 ? eHoje : cap * 4.2;
+      return [
+        { name: 'Sem 1', geracao: Math.round(dayAvg * 7 * 0.95), meta: Math.round(cap * 4.2 * 7) },
+        { name: 'Sem 2', geracao: Math.round(dayAvg * 7 * 1.04), meta: Math.round(cap * 4.2 * 7) },
+        { name: 'Sem 3', geracao: Math.round(dayAvg * 7 * 0.98), meta: Math.round(cap * 4.2 * 7) },
+        { name: 'Sem 4', geracao: Math.round(dayAvg * 7 * 1.08), meta: Math.round(cap * 4.2 * 7) },
+      ];
+    }
+
+    // ANUAL
+    const monthAvg = Math.round(cap * 135);
+    return [
+      { name: 'Jan', geracao: Math.round(monthAvg * 1.12), meta: monthAvg },
+      { name: 'Fev', geracao: Math.round(monthAvg * 1.08), meta: monthAvg },
+      { name: 'Mar', geracao: Math.round(monthAvg * 1.02), meta: monthAvg },
+      { name: 'Abr', geracao: Math.round(monthAvg * 0.94), meta: monthAvg },
+      { name: 'Mai', geracao: Math.round(monthAvg * 0.90), meta: monthAvg },
+      { name: 'Jun', geracao: Math.round(monthAvg * 0.88), meta: monthAvg },
+      { name: 'Jul', geracao: Math.round(monthAvg * 0.92), meta: monthAvg },
+      { name: 'Ago', geracao: Math.round(monthAvg * 1.04), meta: monthAvg },
+      { name: 'Set', geracao: Math.round(monthAvg * 1.10), meta: monthAvg },
+      { name: 'Out', geracao: Math.round(monthAvg * 1.15), meta: monthAvg },
+      { name: 'Nov', geracao: Math.round(monthAvg * 1.14), meta: monthAvg },
+      { name: 'Dez', geracao: Math.round(monthAvg * 1.18), meta: monthAvg },
+    ];
+  };
+
+  const renderComparativeChartsSection = (targetUsina: any) => {
+    const chartData = getChartDataForPeriod(targetUsina, chartPeriod);
+    const isLight = simulatorTheme === 'light';
+
+    return (
+      <div className="space-y-3">
+        {/* Toggle de Período */}
+        <div className={`flex p-1 rounded-2xl border ${isLight ? 'bg-slate-100 border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
+          {(['DIARIO', 'SEMANAL', 'MENSAL', 'ANUAL'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => setChartPeriod(p)}
+              className={`flex-1 py-1.5 rounded-xl text-[10px] font-black tracking-wider transition-all ${
+                chartPeriod === p
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                  : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-100'
+              }`}
+            >
+              {p === 'DIARIO' ? 'Diário' : p === 'SEMANAL' ? 'Semanal' : p === 'MENSAL' ? 'Mensal' : 'Anual'}
+            </button>
+          ))}
+        </div>
+
+        {/* Gráfico Recharts Interativo */}
+        <div className={`p-3 rounded-2xl border ${isLight ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-900/80 border-slate-800'}`}>
+          <div className="flex justify-between items-center mb-2">
+            <span className="font-black text-xs text-orange-500 uppercase tracking-wide">
+              {chartPeriod === 'DIARIO' && '⚡ Potência Instantânea (kW)'}
+              {chartPeriod === 'SEMANAL' && '📅 Geração Semanal (kWh / dia)'}
+              {chartPeriod === 'MENSAL' && '🗓️ Geração Mensal (kWh / sem)'}
+              {chartPeriod === 'ANUAL' && '📊 Geração Anual (kWh / mês)'}
+            </span>
+            <span className="text-[10px] text-slate-400 font-mono">
+              {targetUsina?.name || 'Usina Solar'}
+            </span>
+          </div>
+
+          <div className="h-44 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              {chartPeriod === 'DIARIO' ? (
+                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="solarGlowGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isLight ? "#f1f5f9" : "#334155"} />
+                  <XAxis dataKey="name" stroke={isLight ? "#64748b" : "#94a3b8"} fontSize={10} />
+                  <YAxis stroke={isLight ? "#64748b" : "#94a3b8"} fontSize={10} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: isLight ? '#ffffff' : '#0f172a', borderColor: '#f59e0b', borderRadius: '12px', fontSize: '11px' }}
+                    formatter={(val: any) => [`${val} kW`, 'Potência']}
+                  />
+                  <Area type="monotone" dataKey="power" stroke="#f59e0b" strokeWidth={2.5} fillOpacity={1} fill="url(#solarGlowGrad)" />
+                </AreaChart>
+              ) : (
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isLight ? "#f1f5f9" : "#334155"} />
+                  <XAxis dataKey="name" stroke={isLight ? "#64748b" : "#94a3b8"} fontSize={10} />
+                  <YAxis stroke={isLight ? "#64748b" : "#94a3b8"} fontSize={10} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: isLight ? '#ffffff' : '#0f172a', borderColor: '#3b82f6', borderRadius: '12px', fontSize: '11px' }}
+                    formatter={(val: any) => [`${val} kWh`, 'Geração']}
+                  />
+                  <Bar dataKey="geracao" fill="#3b82f6" radius={[6, 6, 0, 0]} />
+                  {chartPeriod !== 'ANUAL' && <Bar dataKey="meta" fill={isLight ? "#e2e8f0" : "#334155"} radius={[6, 6, 0, 0]} />}
+                </BarChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* KPI Cards do Período */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className={`p-2.5 rounded-2xl border ${isLight ? 'bg-amber-500/5 border-amber-200' : 'bg-amber-500/10 border-amber-500/20'}`}>
+            <span className="text-[9px] font-bold text-amber-500 uppercase block">Geração Total</span>
+            <span className="text-sm font-black block mt-0.5">
+              {chartPeriod === 'DIARIO' && `${targetUsina?.eHoje || '16.5'} kWh`}
+              {chartPeriod === 'SEMANAL' && '115.4 kWh'}
+              {chartPeriod === 'MENSAL' && '495.0 kWh'}
+              {chartPeriod === 'ANUAL' && '5.850 kWh'}
+            </span>
+          </div>
+          <div className={`p-2.5 rounded-2xl border ${isLight ? 'bg-emerald-500/5 border-emerald-200' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
+            <span className="text-[9px] font-bold text-emerald-500 uppercase block">Economia Gerada</span>
+            <span className="text-sm font-black block mt-0.5 text-emerald-500">
+              {chartPeriod === 'DIARIO' && `R$ ${(parseFloat(targetUsina?.eHoje || '16.5') * 0.95).toFixed(2)}`}
+              {chartPeriod === 'SEMANAL' && 'R$ 109,63'}
+              {chartPeriod === 'MENSAL' && 'R$ 470,25'}
+              {chartPeriod === 'ANUAL' && 'R$ 5.557,50'}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Generate SVG weather icon
   const renderWeatherIcon = () => {
     return (
@@ -1041,7 +1210,24 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
             </div>
           )}
 
-          {/* TAB 2: FALHA (FAULTS) */}
+          {/* TAB 2: GRÁFICOS COMPARATIVOS */}
+          {activeTab === 'graficos' && (
+            <div className="space-y-4">
+              <div className={`p-4 rounded-3xl border ${simulatorTheme === 'light' ? 'bg-white/90 border-slate-100 shadow-sm' : 'bg-slate-900/80 border-slate-800'}`}>
+                <span className="block font-black text-sm text-orange-500 mb-1">
+                  📊 Gráficos de Desempenho Solar
+                </span>
+                <span className="block text-xs text-slate-400 font-medium">
+                  Acompanhe e compare a produção de energia fotovoltaica por período.
+                </span>
+              </div>
+
+              {/* Renderiza a seção de gráficos comparativos para a primeira usina ou a usina selecionada */}
+              {renderComparativeChartsSection(filteredUsinas[0] || allUsinas[0])}
+            </div>
+          )}
+
+          {/* TAB 3: FALHA (FAULTS) */}
           {activeTab === 'falha' && (
             <div className="space-y-4">
 
@@ -1375,6 +1561,23 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                 Plantas
               </span>
               {activeTab === 'plantas' && <div className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-0.5"></div>}
+            </button>
+
+            {/* Tab: Gráficos */}
+            <button
+              onClick={() => {
+                setActiveTab('graficos');
+                setPlusMenuOpen(false);
+              }}
+              className="flex-1 flex flex-col items-center justify-center text-center focus:outline-none"
+            >
+              <BarChartIcon
+                className={`text-[20px] transition-transform ${activeTab === 'graficos' ? 'text-purple-600 scale-110 font-bold' : 'text-slate-400'}`}
+              />
+              <span className={`text-[9px] font-bold mt-0.5 ${activeTab === 'graficos' ? 'text-purple-600 font-black' : 'text-slate-400'}`}>
+                Gráficos
+              </span>
+              {activeTab === 'graficos' && <div className="w-1.5 h-1.5 rounded-full bg-purple-600 mt-0.5"></div>}
             </button>
 
             {/* Tab: Falha */}
@@ -2140,58 +2343,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
                     </div>
                   </div>
 
-                  {/* Solar Generation Hourly Curve SVG */}
-                  <div className={`p-3 rounded-2xl border ${simulatorTheme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-900 border-slate-800'}`}>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-extrabold text-[11px] uppercase tracking-wide text-orange-500">Curva Solar Horária (kW)</span>
-                      <span className="text-[9px] text-slate-400 font-mono">06:00 → 18:00</span>
-                    </div>
-
-                    {/* Dynamic Solar Graph */}
-                    <div className="h-28 w-full relative flex items-end pt-2">
-                      <svg className="w-full h-full overflow-visible" viewBox="0 0 200 70">
-                        <defs>
-                          <linearGradient id="solarGraphGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#ff6b00" stopOpacity="0.6" />
-                            <stop offset="100%" stopColor="#ff6b00" stopOpacity="0.0" />
-                          </linearGradient>
-                        </defs>
-
-                        {/* Grid lines */}
-                        <line x1="0" y1="10" x2="200" y2="10" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} strokeDasharray="2 2" />
-                        <line x1="0" y1="35" x2="200" y2="35" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} strokeDasharray="2 2" />
-                        <line x1="0" y1="60" x2="200" y2="60" stroke={simulatorTheme === 'light' ? '#f1f5f9' : '#334155'} />
-
-                        {/* Area fill */}
-                        <path
-                          d="M 10 60 Q 100 0 190 60 L 190 60 L 10 60 Z"
-                          fill="url(#solarGraphGradient)"
-                        />
-
-                        {/* Curve stroke */}
-                        <path
-                          d="M 10 60 Q 100 0 190 60"
-                          fill="none"
-                          stroke="#ff6b00"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                        />
-
-                        {/* Peak solar point indicator */}
-                        <circle cx="100" cy="15" r="4" fill="#ff6b00" className="animate-ping" style={{ animationDuration: '2s' }} />
-                        <circle cx="100" cy="15" r="3" fill="#ffffff" />
-                      </svg>
-                    </div>
-
-                    {/* Time Legend */}
-                    <div className="flex justify-between text-[9px] font-mono text-slate-400 mt-1">
-                      <span>06h</span>
-                      <span>09h</span>
-                      <span>12h (Pico)</span>
-                      <span>15h</span>
-                      <span>18h</span>
-                    </div>
-                  </div>
+                  {/* Solar Generation Comparative Charts (Diário, Semanal, Mensal, Anual) */}
+                  {renderComparativeChartsSection(selectedUsinaData)}
 
                   {/* Financial & Environmental Return */}
                   <div className={`p-3 rounded-2xl border space-y-2 ${simulatorTheme === 'light' ? 'bg-emerald-500/5 border-emerald-200/50' : 'bg-emerald-500/10 border-emerald-500/20'}`}>
