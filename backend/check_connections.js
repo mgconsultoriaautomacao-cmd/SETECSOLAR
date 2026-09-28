@@ -302,8 +302,8 @@ async function checkGoodWe() {
   console.log('  7. GOODWE SEMS PORTAL API');
   console.log('══════════════════════════════════════════════');
 
-  let account = 'G10034513';
-  let pwd = 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88';
+  let account = 'setesolarseg@gmail.com';
+  let pwd = '120687@Eli';
 
   try {
     const dbSupplier = await prisma.dataloggerSupplier.findFirst({ where: { type: 'GOODWE_CLOUD' } });

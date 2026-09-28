@@ -130,9 +130,9 @@ export class GoodWeService {
     stationListResult: any;
     recommendation: string;
   }> {
-    const effAccount = account || 'G10034513';
-    const effClientId = clientId || 'fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH';
-    const effSecret = clientSecret || 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88';
+    const effAccount = account || 'setesolarseg@gmail.com';
+    const effClientId = clientId || 'setesolarseg@gmail.com';
+    const effSecret = clientSecret || '120687@Eli';
 
     this.logger.log(`🔍 Executando diagnóstico GoodWe para conta: ${effAccount}...`);
 
@@ -156,8 +156,8 @@ export class GoodWeService {
         } else {
           loginRes = {
             status: 'AUTH_FAILED',
-            message: 'Não foi possível autenticar no SEMS Portal usando a conta/código corporativo e o Client Secret.',
-            hint: 'A GoodWe costuma vincular a API ao e-mail de login da conta no SEMS+ (ex: admin@empresa.com) ou exige permissão de IP liberada.',
+            message: 'Não foi possível autenticar no SEMS Portal usando o usuário/e-mail e senha informados.',
+            hint: 'Verifique se o e-mail (setesolarseg@gmail.com) e a senha no SEMS Portal estão corretos.',
           };
         }
       }
@@ -170,7 +170,7 @@ export class GoodWeService {
     return {
       credentials: {
         account: effAccount,
-        company: 'Rosivangela Saraiva de Souza LTDA',
+        company: 'SETE SOLAR ENERGIA',
         clientIdPreview: effClientId ? `${effClientId.substring(0, 8)}...` : null,
         clientSecretPreview: effSecret ? `${effSecret.substring(0, 8)}...` : null,
       },
@@ -178,7 +178,7 @@ export class GoodWeService {
       stationListResult: stationListRes,
       recommendation: isOk
         ? '✅ Conexão com o GoodWe SEMS Portal estabelecida com sucesso!'
-        : '⚠️ As credenciais foram registradas no sistema. Se o status retornar erro de autenticação, verifique se o e-mail cadastrado na conta GoodWe deve ser usado no lugar do código corporativo (G10034513).',
+        : '⚠️ As credenciais foram registradas no sistema. Se o status retornar erro de autenticação, verifique o e-mail ou a senha no SEMS Portal.',
     };
   }
 
@@ -215,8 +215,8 @@ export class GoodWeService {
    */
   async readUsinaFromCloud(
     stationIdOrSn: string,
-    account = 'G10034513',
-    clientSecret = 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88'
+    account = 'setesolarseg@gmail.com',
+    clientSecret = '120687@Eli'
   ): Promise<GoodWeReading | null> {
     try {
       const loginObj = await this.login(account, clientSecret);

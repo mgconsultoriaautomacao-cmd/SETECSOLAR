@@ -881,8 +881,8 @@ export class SolarmanService implements OnModuleInit {
       }
 
       if (supplier.type === 'GOODWE_CLOUD' || supplier.type === 'GOODWE') {
-        const account = supplier.username || supplier.appId || 'G10034513';
-        const secret = supplier.appSecret || supplier.token || 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88';
+        const account = supplier.username || supplier.appId || 'setesolarseg@gmail.com';
+        const secret = supplier.appSecret || supplier.token || '120687@Eli';
         const goodweData = await this.goodweService.readUsinaFromCloud(cleanDatalogger, account, secret);
         if (goodweData) {
           return {
@@ -2185,14 +2185,14 @@ export class SolarmanService implements OnModuleInit {
       supplier = await this.dbCreateSupplier({
         name: 'GoodWe SEMS Portal (Auto)',
         type: 'GOODWE_CLOUD',
-        username: 'G10034513',
-        appId: 'fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH',
-        appSecret: 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88',
+        username: 'setesolarseg@gmail.com',
+        appId: 'setesolarseg@gmail.com',
+        appSecret: '120687@Eli',
       });
     }
 
-    const account = supplier.username || supplier.appId || 'G10034513';
-    const secret = supplier.appSecret || supplier.token || 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88';
+    const account = supplier.username || supplier.appId || 'setesolarseg@gmail.com';
+    const secret = supplier.appSecret || supplier.token || '120687@Eli';
 
     const loginObj = await this.goodweService.login(account, secret);
     if (!loginObj) {
