@@ -2307,34 +2307,39 @@ export class SolarmanService implements OnModuleInit {
     errors: string[];
     details: { name: string; deviceSn: string; action: string }[];
   }> {
-    this.logger.log('🌐 Iniciando Sincronização Unificada de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe)...');
+    this.logger.log('🌐 Iniciando Sincronização Unificada PARALELA de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe)...');
 
-    const growattRes = await this.syncGrowattPlants(clientId).catch(err => ({
-      created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
-    }));
+    const emptyRes = { created: 0, skipped: 0, updated: 0, errors: [] as string[], details: [] as any[] };
 
-    const solisRes = await this.syncSolisPlants(clientId).catch(err => ({
-      created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
-    }));
+    const results = await Promise.allSettled([
+      this.syncGrowattPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
+      this.syncSolisPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
+      this.syncSolplanetPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
+      this.syncSolarmanPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
+      this.syncGoodWePlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
+    ]);
 
-    const solplanetRes = await this.syncSolplanetPlants(clientId).catch(err => ({
-      created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
-    }));
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalSkipped = 0;
+    const allErrors: string[] = [];
+    const allDetails: any[] = [];
 
-    const solarmanRes = await this.syncSolarmanPlants(clientId).catch(err => ({
-      created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
-    }));
+    results.forEach((res) => {
+      if (res.status === 'fulfilled' && res.value) {
+        const val = res.value;
+        totalCreated += val.created || 0;
+        totalUpdated += val.updated || 0;
+        totalSkipped += val.skipped || 0;
+        if (val.errors) allErrors.push(...val.errors);
+        if (val.details) allDetails.push(...val.details);
+      }
+    });
 
-    const goodweRes = await this.syncGoodWePlants(clientId).catch(err => ({
-      created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
-    }));
-
-    const totalCreated = growattRes.created + solisRes.created + solplanetRes.created + solarmanRes.created + goodweRes.created;
-    const totalUpdated = growattRes.updated + solisRes.updated + solplanetRes.updated + solarmanRes.updated + goodweRes.updated;
-    const totalSkipped = growattRes.skipped + solisRes.skipped + solplanetRes.skipped + solarmanRes.skipped + goodweRes.skipped;
-    const allErrors = [...growattRes.errors, ...solisRes.errors, ...solplanetRes.errors, ...solarmanRes.errors, ...goodweRes.errors];
-    const allDetails = [...growattRes.details, ...solisRes.details, ...solplanetRes.details, ...solarmanRes.details, ...goodweRes.details];
-
+    // Dispara pollAll em segundo plano sem bloquear a resposta HTTP (evita HTTP 504 no Vercel)
+    if (totalCreated > 0 || totalUpdated > 0) {
+      this.pollAll().catch(err => this.logger.warn(`Erro no pollAll pós-sync-all: ${err.message}`));
+    }
 
     return {
       created: totalCreated,
