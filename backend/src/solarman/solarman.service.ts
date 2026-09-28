@@ -2158,6 +2158,147 @@ export class SolarmanService implements OnModuleInit {
     return result;
   }
 
+  // ─── GoodWe SEMS Portal: Sincronização de plantas → Usinas no banco ───────────
+  async syncGoodWePlants(clientId?: string, supplierId?: string): Promise<{
+    created: number;
+    skipped: number;
+    updated: number;
+    errors: string[];
+    details: { name: string; deviceSn: string; action: string }[];
+  }> {
+    const result = {
+      created: 0,
+      skipped: 0,
+      updated: 0,
+      errors: [] as string[],
+      details: [] as { name: string; deviceSn: string; action: string }[],
+    };
+
+    let supplier: any = null;
+    if (supplierId) {
+      supplier = await this.dbGetSupplier(supplierId);
+    }
+    if (!supplier) {
+      supplier = await this.dbGetSupplier(undefined, 'GOODWE_CLOUD');
+    }
+    if (!supplier) {
+      supplier = await this.dbCreateSupplier({
+        name: 'GoodWe SEMS Portal (Auto)',
+        type: 'GOODWE_CLOUD',
+        username: 'G10034513',
+        appId: 'fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH',
+        appSecret: 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88',
+      });
+    }
+
+    const account = supplier.username || supplier.appId || 'G10034513';
+    const secret = supplier.appSecret || supplier.token || 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88';
+
+    const loginObj = await this.goodweService.login(account, secret);
+    if (!loginObj) {
+      result.errors.push('Falha ao autenticar no GoodWe SEMS Portal. Verifique a conta/e-mail e a senha/secret cadastrados.');
+      return result;
+    }
+
+    try {
+      const plantList = await this.goodweService.listPlants(loginObj.uid, loginObj.token, loginObj.clusterUrl);
+      if (!plantList || plantList.length === 0) {
+        result.errors.push('Nenhuma usina/estação encontrada na conta GoodWe SEMS Portal.');
+        return result;
+      }
+
+      const existingUsinas = await this.dbGetUsinas();
+
+      const getOrCreateClient = async (clientName: string) => {
+        let found = await this.dbGetClient(clientId, clientName);
+        if (!found) {
+          found = await this.dbCreateClient({
+            name: clientName,
+            email: `goodwe_${Date.now()}@local`,
+            document: '00000000000',
+            phone: '00000000000',
+            whatsapp: '00000000000',
+            zipCode: '00000000',
+            address: 'Importado via GoodWe SEMS Portal',
+            city: 'Importado',
+            state: 'RN',
+            installationDate: new Date(),
+          });
+        }
+        return found?.id;
+      };
+
+      for (const st of plantList) {
+        const stationName = st.pw_name || st.powerstation_name || st.name || `GoodWe Plant ${st.pw_id || st.id}`;
+        const stationIdStr = String(st.pw_id || st.id || st.powerstation_id || '');
+        const deviceSn = st.sn || st.inverter_sn || stationIdStr;
+
+        const existing = existingUsinas.find(u =>
+          u.datalogger === deviceSn ||
+          u.datalogger === stationIdStr ||
+          u.name === stationName
+        );
+
+        if (existing) {
+          try {
+            const clientTargetId = await getOrCreateClient(stationName);
+            await this.dbUpdateUsina(existing.id, {
+              clientId: clientTargetId,
+              datalogger: deviceSn,
+              dataloggerSupplierId: supplier?.id,
+              status: 'ONLINE',
+            });
+            result.updated++;
+            result.details.push({ name: stationName, deviceSn, action: 'Atualizada (GoodWe Cloud)' });
+          } catch (e) {
+            result.skipped++;
+            result.details.push({ name: stationName, deviceSn, action: 'Já existe' });
+          }
+          continue;
+        }
+
+        try {
+          const clientTargetId = await getOrCreateClient(stationName);
+          const cap = Number(st.capacity || st.capacity_kw || 10.0);
+
+          await this.dbCreateUsina({
+            name: stationName,
+            clientId: clientTargetId,
+            capacityKwp: cap,
+            inverterCapacity: cap * 0.8,
+            moduleCount: Math.round(cap * 2),
+            manufacturer: 'GoodWe',
+            model: st.model || 'GoodWe Inverter',
+            utilityCompany: '',
+            estimatedKwh: cap * 130,
+            paybackYears: 4.0,
+            installationDate: new Date(),
+            status: 'ONLINE',
+            datalogger: deviceSn,
+            city: st.city || 'Importado',
+            state: 'RN',
+            address: st.address || 'Importado GoodWe',
+            dataloggerSupplierId: supplier?.id,
+            gpsLatitude: st.latitude ? Number(st.latitude) : null,
+            gpsLongitude: st.longitude ? Number(st.longitude) : null,
+          });
+          result.created++;
+          result.details.push({ name: stationName, deviceSn, action: 'Criada' });
+        } catch (err: any) {
+          result.errors.push(`Erro ao criar usina GoodWe "${stationName}": ${err.message}`);
+        }
+      }
+    } catch (err: any) {
+      result.errors.push(`Erro ao consultar GoodWe SEMS API: ${err.message}`);
+    }
+
+    if (result.created > 0 || result.updated > 0) {
+      await this.pollAll();
+    }
+
+    return result;
+  }
+
   // ─── Sincronização Unificada de Todos os Fornecedores Cloud ─────────────────
   async syncAllCloudPlants(clientId?: string): Promise<{
     created: number;
@@ -2166,7 +2307,7 @@ export class SolarmanService implements OnModuleInit {
     errors: string[];
     details: { name: string; deviceSn: string; action: string }[];
   }> {
-    this.logger.log('🌐 Iniciando Sincronização Unificada de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman)...');
+    this.logger.log('🌐 Iniciando Sincronização Unificada de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe)...');
 
     const growattRes = await this.syncGrowattPlants(clientId).catch(err => ({
       created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
@@ -2184,11 +2325,15 @@ export class SolarmanService implements OnModuleInit {
       created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
     }));
 
-    const totalCreated = growattRes.created + solisRes.created + solplanetRes.created + solarmanRes.created;
-    const totalUpdated = growattRes.updated + solisRes.updated + solplanetRes.updated + solarmanRes.updated;
-    const totalSkipped = growattRes.skipped + solisRes.skipped + solplanetRes.skipped + solarmanRes.skipped;
-    const allErrors = [...growattRes.errors, ...solisRes.errors, ...solplanetRes.errors, ...solarmanRes.errors];
-    const allDetails = [...growattRes.details, ...solisRes.details, ...solplanetRes.details, ...solarmanRes.details];
+    const goodweRes = await this.syncGoodWePlants(clientId).catch(err => ({
+      created: 0, skipped: 0, updated: 0, errors: [err.message], details: []
+    }));
+
+    const totalCreated = growattRes.created + solisRes.created + solplanetRes.created + solarmanRes.created + goodweRes.created;
+    const totalUpdated = growattRes.updated + solisRes.updated + solplanetRes.updated + solarmanRes.updated + goodweRes.updated;
+    const totalSkipped = growattRes.skipped + solisRes.skipped + solplanetRes.skipped + solarmanRes.skipped + goodweRes.skipped;
+    const allErrors = [...growattRes.errors, ...solisRes.errors, ...solplanetRes.errors, ...solarmanRes.errors, ...goodweRes.errors];
+    const allDetails = [...growattRes.details, ...solisRes.details, ...solplanetRes.details, ...solarmanRes.details, ...goodweRes.details];
 
 
     return {

@@ -211,9 +211,15 @@ export class SolarmanController {
     return this.goodweService.diagnose(acc, cId, cSecret);
   }
 
+  // POST /solarman/goodwe/sync — Sincroniza plantas GoodWe SEMS Portal → cria/atualiza usinas no banco
+  @Post('goodwe/sync')
+  async syncGoodWePlants(@Body() body: { clientId?: string; supplierId?: string }) {
+    return this.solarmanService.syncGoodWePlants(body.clientId, body.supplierId);
+  }
+
   // ─── Sincronização Unificada (Todos os Fornecedores Cloud) ────────────────
 
-  // POST /solarman/sync-all — Sincroniza Growatt, Solis, Solplanet e Solarman de uma só vez
+  // POST /solarman/sync-all — Sincroniza Growatt, Solis, Solplanet, Solarman e GoodWe de uma só vez
   @Post('sync-all')
   async syncAllCloudPlants(@Body() body: { clientId?: string }) {
     return this.solarmanService.syncAllCloudPlants(body.clientId);

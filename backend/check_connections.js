@@ -296,6 +296,45 @@ async function checkSolarman() {
   }
 }
 
+// ─── 7. GOODWE SEMS PORTAL API ──────────────────────────────────────────────
+async function checkGoodWe() {
+  console.log('\n══════════════════════════════════════════════');
+  console.log('  7. GOODWE SEMS PORTAL API');
+  console.log('══════════════════════════════════════════════');
+
+  let account = 'G10034513';
+  let pwd = 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88';
+
+  try {
+    const dbSupplier = await prisma.dataloggerSupplier.findFirst({ where: { type: 'GOODWE_CLOUD' } });
+    if (dbSupplier) {
+      account = dbSupplier.username || dbSupplier.appId || account;
+      pwd = dbSupplier.appSecret || dbSupplier.token || pwd;
+      console.log(INFO(`Credenciais GoodWe carregadas do banco (Conta: ${account}).`));
+    }
+  } catch (e) {}
+
+  const headerToken = JSON.stringify({
+    version: 'v2.1.0', client: 'ios', language: 'en', timestamp: Date.now(), uid: '', token: ''
+  });
+
+  try {
+    const res = await axios.post(
+      'https://www.semsportal.com/api/v2/Common/CrossLogin',
+      { account, pwd },
+      { headers: { 'Content-Type': 'application/json', token: headerToken }, timeout: 10000 }
+    );
+    if (res.data && !res.data.hasError && res.data.data?.token) {
+      console.log(OK(`GoodWe SEMS Portal autenticação OK — UID: ${res.data.data.uid}`));
+    } else {
+      console.log(WARN(`GoodWe SEMS Portal respondeu: ${res.data?.msg || 'Erro na autenticação'} (código: ${res.data?.code})`));
+      console.log(INFO('Dica: No portal SEMS+, certifique-se de que a conta cadastrada é o e-mail de acesso ou se há liberação de IP exigida pela GoodWe.'));
+    }
+  } catch (e) {
+    console.log(FAIL(`GoodWe SEMS Portal falhou: ${e.message}`));
+  }
+}
+
 // ─── MAIN ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('\n╔══════════════════════════════════════════════╗');
@@ -309,6 +348,7 @@ async function main() {
   await checkSolis();
   await checkSolplanet();
   await checkSolarman();
+  await checkGoodWe();
 
   console.log('\n══════════════════════════════════════════════');
   console.log('  Diagnóstico concluído.');
