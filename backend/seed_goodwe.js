@@ -7,12 +7,12 @@ async function seedGoodWe() {
   console.log('--- Cadastrando / Atualizando Fornecedor GoodWe SEMS Portal ---');
 
   const supplierData = {
-    name: 'GoodWe SEMS Portal (Rosivangela LTDA)',
+    name: 'GoodWe SEMS Portal (SETEC SOLAR)',
     type: 'GOODWE_CLOUD',
-    username: 'G10034513',
+    username: 'setecsolarseg@gmail.com',
     appId: 'fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH',
     appSecret: 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88',
-    token: 'G10034513',
+    token: '120687@Eli',
   };
 
   try {

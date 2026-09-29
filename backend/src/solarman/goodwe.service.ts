@@ -130,8 +130,8 @@ export class GoodWeService {
     stationListResult: any;
     recommendation: string;
   }> {
-    const effAccount = account || 'setesolarseg@gmail.com';
-    const effClientId = clientId || 'setesolarseg@gmail.com';
+    const effAccount = account || 'setecsolarseg@gmail.com';
+    const effClientId = clientId || 'fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH';
     const effSecret = clientSecret || '120687@Eli';
 
     this.logger.log(`🔍 Executando diagnóstico GoodWe para conta: ${effAccount}...`);
@@ -157,7 +157,7 @@ export class GoodWeService {
           loginRes = {
             status: 'AUTH_FAILED',
             message: 'Não foi possível autenticar no SEMS Portal usando o usuário/e-mail e senha informados.',
-            hint: 'Verifique se o e-mail (setesolarseg@gmail.com) e a senha no SEMS Portal estão corretos.',
+            hint: 'Verifique se o e-mail (setecsolarseg@gmail.com) e a senha no SEMS Portal estão corretos.',
           };
         }
       }
