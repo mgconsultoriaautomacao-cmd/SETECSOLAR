@@ -12,7 +12,7 @@ async function seedGoodWe() {
     username: 'setecsolarseg@gmail.com',
     appId: 'fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH',
     appSecret: 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88',
-    token: '120687@Eli',
+    token: 'Admin@123',
   };
 
   try {
