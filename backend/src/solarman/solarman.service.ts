@@ -1440,7 +1440,7 @@ export class SolarmanService implements OnModuleInit {
 
         try {
           const plantClientId = await getOrCreateClientForPlant(plantName);
-          await this.dbCreateUsina({
+          const createdUsina = await this.dbCreateUsina({
             name: plantName,
             clientId: plantClientId,
             capacityKwp: parseFloat(plant.peakPower) || 0,
@@ -1461,9 +1461,13 @@ export class SolarmanService implements OnModuleInit {
             gpsLatitude: plant.gpsLatitude || null,
             gpsLongitude: plant.gpsLongitude || null,
           });
-          result.created++;
-          result.details.push({ name: plantName, deviceSn: dataloggerValue, action: 'Criada' });
-          this.logger.log(`  ✅ Usina criada: "${plantName}" (planta ${plant.plantId})`);
+          if (createdUsina) {
+            result.created++;
+            result.details.push({ name: plantName, deviceSn: dataloggerValue, action: 'Criada' });
+            this.logger.log(`  ✅ Usina criada: "${plantName}" (planta ${plant.plantId})`);
+          } else {
+            result.errors.push(`Erro ao salvar usina "${plantName}" no banco de dados.`);
+          }
         } catch (err: any) {
           result.errors.push(`Erro ao criar usina "${plantName}": ${err.message}`);
         }
@@ -1524,7 +1528,7 @@ export class SolarmanService implements OnModuleInit {
 
       try {
         const plantClientId = await getOrCreateClientForPlant(plant?.name || 'Cliente Desconhecido');
-        await this.dbCreateUsina({
+        const createdUsina = await this.dbCreateUsina({
           name: usinaName,
           clientId: plantClientId,
           capacityKwp: plant ? parseFloat(plant.peakPower) || 0 : 0,
@@ -1545,9 +1549,13 @@ export class SolarmanService implements OnModuleInit {
           gpsLatitude: plant?.gpsLatitude || null,
           gpsLongitude: plant?.gpsLongitude || null,
         });
-        result.created++;
-        result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
-        this.logger.log(`  ✅ Usina criada: "${usinaName}" (SN: ${deviceSn})`);
+        if (createdUsina) {
+          result.created++;
+          result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
+          this.logger.log(`  ✅ Usina criada: "${usinaName}" (SN: ${deviceSn})`);
+        } else {
+          result.errors.push(`Erro ao salvar usina Growatt "${usinaName}" (${deviceSn}) no banco de dados.`);
+        }
       } catch (err: any) {
         result.errors.push(`Erro ao criar usina "${usinaName}": ${err.message}`);
       }
@@ -1672,7 +1680,7 @@ export class SolarmanService implements OnModuleInit {
 
       try {
         const plantClientId = await getOrCreateClientForPlant(plant?.name || usinaName);
-        await this.dbCreateUsina({
+        const createdUsina = await this.dbCreateUsina({
           name: usinaName,
           clientId: plantClientId,
           capacityKwp: cap,
@@ -1695,8 +1703,12 @@ export class SolarmanService implements OnModuleInit {
           generationToday: plant?.etoday !== null && plant?.etoday !== undefined ? plant.etoday : undefined,
           generationTotal: plant?.etotal !== null && plant?.etotal !== undefined ? plant.etotal : undefined,
         });
-        result.created++;
-        result.details.push({ name: usinaName, deviceSn: deviceSn || plant?.apikey, action: 'Criada' });
+        if (createdUsina) {
+          result.created++;
+          result.details.push({ name: usinaName, deviceSn: deviceSn || plant?.apikey, action: 'Criada' });
+        } else {
+          result.errors.push(`Erro ao salvar usina Solplanet "${usinaName}" no banco de dados.`);
+        }
       } catch (err: any) {
         result.errors.push(`Erro ao criar usina Solplanet "${usinaName}": ${err.message}`);
       }
@@ -1852,7 +1864,7 @@ export class SolarmanService implements OnModuleInit {
               const clientTargetId = await getOrCreateClient(plant.name);
               const cap = dev.powerKw || plant.capacityKwp || 8.0;
 
-              await this.dbCreateUsina({
+              const createdUsina = await this.dbCreateUsina({
                 name: usinaName,
                 clientId: clientTargetId,
                 capacityKwp: cap,
@@ -1873,8 +1885,12 @@ export class SolarmanService implements OnModuleInit {
                 gpsLatitude: plant.latitude || null,
                 gpsLongitude: plant.longitude || null,
               });
-              result.created++;
-              result.details.push({ name: usinaName, deviceSn: deviceSn || plant.stationId, action: 'Criada' });
+              if (createdUsina) {
+                result.created++;
+                result.details.push({ name: usinaName, deviceSn: deviceSn || plant.stationId, action: 'Criada' });
+              } else {
+                result.errors.push(`Erro ao salvar usina Solis "${usinaName}" no banco de dados.`);
+              }
             } catch (err: any) {
               result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
             }
@@ -1917,7 +1933,7 @@ export class SolarmanService implements OnModuleInit {
             const clientTargetId = await getOrCreateClient(plant.name);
             const cap = plant.capacityKwp || 8.0;
 
-            await this.dbCreateUsina({
+            const createdUsina = await this.dbCreateUsina({
               name: usinaName,
               clientId: clientTargetId,
               capacityKwp: cap,
@@ -1938,8 +1954,12 @@ export class SolarmanService implements OnModuleInit {
               gpsLatitude: plant.latitude || null,
               gpsLongitude: plant.longitude || null,
             });
-            result.created++;
-            result.details.push({ name: usinaName, deviceSn: stationIdentifier, action: 'Criada' });
+            if (createdUsina) {
+              result.created++;
+              result.details.push({ name: usinaName, deviceSn: stationIdentifier, action: 'Criada' });
+            } else {
+              result.errors.push(`Erro ao salvar usina Solis "${usinaName}" no banco de dados.`);
+            }
           } catch (err: any) {
             result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
           }
@@ -1979,7 +1999,7 @@ export class SolarmanService implements OnModuleInit {
           const clientTargetId = await getOrCreateClient(dev.stationName || 'Cliente Solis');
           const cap = dev.powerKw || 8.0;
 
-          await this.dbCreateUsina({
+          const createdUsina = await this.dbCreateUsina({
             name: usinaName,
             clientId: clientTargetId,
             capacityKwp: cap,
@@ -2000,8 +2020,12 @@ export class SolarmanService implements OnModuleInit {
             gpsLatitude: null,
             gpsLongitude: null,
           });
-          result.created++;
-          result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
+          if (createdUsina) {
+            result.created++;
+            result.details.push({ name: usinaName, deviceSn, action: 'Criada' });
+          } else {
+            result.errors.push(`Erro ao salvar usina Solis "${usinaName}" no banco de dados.`);
+          }
         } catch (err: any) {
           result.errors.push(`Erro ao criar usina Solis "${usinaName}": ${err.message}`);
         }
@@ -2120,7 +2144,7 @@ export class SolarmanService implements OnModuleInit {
           });
 
           const capacityKwp = Number(st.capacity || st.installedCapacity || 10);
-          await this.dbCreateUsina({
+          const createdUsina = await this.dbCreateUsina({
             name: stationName,
             clientId: client?.id,
             capacityKwp: capacityKwp,
@@ -2141,8 +2165,12 @@ export class SolarmanService implements OnModuleInit {
             gpsLatitude: st.latitude ? Number(st.latitude) : null,
             gpsLongitude: st.longitude ? Number(st.longitude) : null,
           });
-          result.created++;
-          result.details.push({ name: stationName, deviceSn, action: 'Criada' });
+          if (createdUsina) {
+            result.created++;
+            result.details.push({ name: stationName, deviceSn, action: 'Criada' });
+          } else {
+            result.errors.push(`Erro ao salvar usina Solarman "${stationName}" no banco de dados.`);
+          }
         } catch (err: any) {
           result.errors.push(`Erro ao criar usina "${stationName}": ${err.message}`);
         }
@@ -2196,7 +2224,7 @@ export class SolarmanService implements OnModuleInit {
 
     const loginObj = await this.goodweService.login(account, secret);
     if (!loginObj) {
-      result.errors.push('Falha ao autenticar no GoodWe SEMS Portal. Verifique a conta/e-mail e a senha/secret cadastrados.');
+      result.errors.push('Falha ao autenticar no GoodWe SEMS Portal (Email/Senha incorretos - código 100005). Verifique o cadastro no portal SEMS+.');
       return result;
     }
 
@@ -2261,7 +2289,7 @@ export class SolarmanService implements OnModuleInit {
           const clientTargetId = await getOrCreateClient(stationName);
           const cap = Number(st.capacity || st.capacity_kw || 10.0);
 
-          await this.dbCreateUsina({
+          const createdUsina = await this.dbCreateUsina({
             name: stationName,
             clientId: clientTargetId,
             capacityKwp: cap,
@@ -2282,8 +2310,12 @@ export class SolarmanService implements OnModuleInit {
             gpsLatitude: st.latitude ? Number(st.latitude) : null,
             gpsLongitude: st.longitude ? Number(st.longitude) : null,
           });
-          result.created++;
-          result.details.push({ name: stationName, deviceSn, action: 'Criada' });
+          if (createdUsina) {
+            result.created++;
+            result.details.push({ name: stationName, deviceSn, action: 'Criada' });
+          } else {
+            result.errors.push(`Erro ao salvar usina GoodWe "${stationName}" no banco de dados.`);
+          }
         } catch (err: any) {
           result.errors.push(`Erro ao criar usina GoodWe "${stationName}": ${err.message}`);
         }
