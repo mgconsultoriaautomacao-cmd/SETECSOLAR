@@ -39,6 +39,8 @@ import WifiTetheringIcon from '@mui/icons-material/WifiTethering';
 import SyncIcon from '@mui/icons-material/Sync';
 import CloudDownloadIcon from '@mui/icons-material/CloudDownload';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useApp, type Usina } from '../context/AppContext';
 import { SolarLoader } from '../components/SolarLoader';
 
@@ -179,33 +181,23 @@ export default function Usinas() {
     });
   };
 
+  const [showSecretMap, setShowSecretMap] = useState<Record<string, boolean>>({});
+
+  const toggleShowSecret = (field: string) => {
+    setShowSecretMap(prev => ({ ...prev, [field]: !prev[field] }));
+  };
+
   const handleTypeChange = (type: string) => {
-    let extraFields = {};
-    if (type === 'SOLPLANET_CLOUD') {
-      extraFields = {
-        appId: '205024856',
-        appSecret: 'QT3qSt0ntxTI8JminCull8p2066zCDnZ',
-        token: 'N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09',
-        apiKey: ''
-      };
-    } else if (type === 'GROWATT_CLOUD') {
-      extraFields = {
-        token: '3b4eyuhm081vo6301x18e66l05b9kcjh',
-        appId: '',
-        appSecret: '',
-        username: '',
-        password: ''
-      };
-    } else {
-      extraFields = {
-        appId: '',
-        appSecret: '',
-        token: '',
-        username: '',
-        password: ''
-      };
-    }
-    setSupplierForm(prev => ({ ...prev, type, ...extraFields }));
+    setSupplierForm(prev => ({
+      ...prev,
+      type,
+      appId: '',
+      appSecret: '',
+      token: '',
+      apiKey: '',
+      username: '',
+      password: '',
+    }));
   };
 
   const handleOpenEditSupplier = (supplier: any) => {
@@ -1107,11 +1099,22 @@ export default function Usinas() {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       label="Key Secret (SolisCloud)"
+                      type={showSecretMap['solis_secret'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.appSecret}
                       onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value })}
-                      placeholder="Ex: c526acc1c0ec4e57b12f42c3ff922ee8"
-                      slotProps={{ inputLabel: { shrink: true } }}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('solis_secret')} edge="end" size="small">
+                                {showSecretMap['solis_secret'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
                 </>
@@ -1121,11 +1124,22 @@ export default function Usinas() {
                 <Grid size={12}>
                   <TextField
                     label="API Token (Growatt)"
+                    type={showSecretMap['growatt_token'] ? 'text' : 'password'}
                     fullWidth
                     value={supplierForm.token}
                     onChange={e => setSupplierForm({ ...supplierForm, token: e.target.value })}
-                    placeholder="Ex: 82774gx5t68b8zdei8..."
-                    slotProps={{ inputLabel: { shrink: true } }}
+                    slotProps={{
+                      inputLabel: { shrink: true },
+                      input: {
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton onClick={() => toggleShowSecret('growatt_token')} edge="end" size="small">
+                              {showSecretMap['growatt_token'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      },
+                    }}
                   />
                 </Grid>
               )}
@@ -1138,7 +1152,6 @@ export default function Usinas() {
                       fullWidth
                       value={supplierForm.username || supplierForm.appId}
                       onChange={e => setSupplierForm({ ...supplierForm, username: e.target.value, appId: e.target.value })}
-                      placeholder="Ex: G10034513"
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
@@ -1148,24 +1161,32 @@ export default function Usinas() {
                       fullWidth
                       value={supplierForm.appId}
                       onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
-                      placeholder="Ex: fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH"
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       label="Client Secret (GoodWe)"
+                      type={showSecretMap['goodwe_secret'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.appSecret || supplierForm.token}
                       onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value, token: e.target.value })}
-                      placeholder="Ex: zFt7CdQo2bjANAFUjrPwYtRm9..."
-                      slotProps={{ inputLabel: { shrink: true } }}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('goodwe_secret')} edge="end" size="small">
+                                {showSecretMap['goodwe_secret'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
                 </>
               )}
-
-
 
               {supplierForm.type === 'SOLARMAN_CLOUD' && (
                 <>
@@ -1181,10 +1202,22 @@ export default function Usinas() {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       label="App Secret (Solarman)"
+                      type={showSecretMap['solarman_secret'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.appSecret}
                       onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value })}
-                      slotProps={{ inputLabel: { shrink: true } }}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('solarman_secret')} edge="end" size="small">
+                                {showSecretMap['solarman_secret'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
@@ -1199,11 +1232,22 @@ export default function Usinas() {
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       label="Senha Solarman"
-                      type="password"
+                      type={showSecretMap['solarman_password'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.password}
                       onChange={e => setSupplierForm({ ...supplierForm, password: e.target.value })}
-                      slotProps={{ inputLabel: { shrink: true } }}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('solarman_password')} edge="end" size="small">
+                                {showSecretMap['solarman_password'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
                 </>
@@ -1217,39 +1261,71 @@ export default function Usinas() {
                       fullWidth
                       value={supplierForm.appId}
                       onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
-                      placeholder="Ex: 205024856"
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       label="App Secret (Solplanet)"
+                      type={showSecretMap['solplanet_secret'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.appSecret}
                       onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value })}
-                      placeholder="Ex: QT3qSt0ntxTI8JminCull8p20..."
-                      slotProps={{ inputLabel: { shrink: true } }}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('solplanet_secret')} edge="end" size="small">
+                                {showSecretMap['solplanet_secret'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       label="API Token / Pro Token (Solplanet)"
+                      type={showSecretMap['solplanet_token'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.token}
                       onChange={e => setSupplierForm({ ...supplierForm, token: e.target.value })}
-                      placeholder="Ex: N1YyRFB4aHF3T2tTTmJvMjZyNDF0QT09"
-                      slotProps={{ inputLabel: { shrink: true } }}
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('solplanet_token')} edge="end" size="small">
+                                {showSecretMap['solplanet_token'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       label="API Key do Inversor (Solplanet)"
+                      type={showSecretMap['solplanet_apikey'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.apiKey}
                       onChange={e => setSupplierForm({ ...supplierForm, apiKey: e.target.value })}
-                      placeholder="Chave específica do inversor (opcional se igual ao Token)"
-                      helperText="Encontre em: Account > Safety settings > API authorization code (2ª coluna)"
-                      slotProps={{ inputLabel: { shrink: true } }}
+                      helperText="Encontre em: Account > Safety settings > API authorization code"
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('solplanet_apikey')} edge="end" size="small">
+                                {showSecretMap['solplanet_apikey'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
                     />
                   </Grid>
                 </>

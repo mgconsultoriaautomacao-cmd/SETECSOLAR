@@ -13,6 +13,7 @@ async function seedGoodWe() {
     appId: 'fL6qA3o4a3H0LCXAWBNI5kscQk2kPauH',
     appSecret: 'zFt7CdQo2bjANAFUjrPwYtRm9hg8XaYrHX2Wv4zJw5VGTF6hcCTntBHthgxKKO88',
     token: 'Admin@123',
+    password: 'Admin@123',
   };
 
   try {
@@ -37,7 +38,7 @@ async function seedGoodWe() {
       console.log('Criando novo fornecedor GoodWe via Prisma...');
       const created = await prisma.dataloggerSupplier.create({
         data: supplierData
-      });
+      }); 
       console.log('✅ Criado via Prisma:', created);
     }
   } catch (err) {

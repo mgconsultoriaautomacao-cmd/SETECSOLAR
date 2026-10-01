@@ -4,3 +4,4 @@ node_modules/
 dist/
 RESUMO_SESSAO.md
 .vercel
+.env*

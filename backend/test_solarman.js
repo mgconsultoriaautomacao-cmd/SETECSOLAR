@@ -5,9 +5,12 @@ async function testSolarman() {
   const appId = '302407178765198';
   const appSecret = '498bdb2be4a5c9f3a3d22332f28395c7';
   const email = 'setecsolarseg@gmail.com';
-  const rawPassword = '120687@Eli';
-  const sha256Password = crypto.createHash('sha256').update(rawPassword).digest('hex');
-  const md5Password = crypto.createHash('md5').update(rawPassword).digest('hex');
+  const passwords = ['120687@Eli', 'Admin@123'];
+
+  for (const rawPassword of passwords) {
+    const sha256Password = crypto.createHash('sha256').update(rawPassword).digest('hex');
+    const md5Password = crypto.createHash('md5').update(rawPassword).digest('hex');
+    console.log(`\n================ Testing Raw Password: ${rawPassword} ================`);
 
   const hosts = [
     'https://globalapi.solarmanpv.com',
@@ -36,6 +39,7 @@ async function testSolarman() {
       } catch (e) {
         console.log(`  [${v.label}] Falhou: ${e.response?.status || e.message} -> ${JSON.stringify(e.response?.data)}`);
       }
+    }
     }
   }
 }

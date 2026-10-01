@@ -309,7 +309,7 @@ async function checkGoodWe() {
     const dbSupplier = await prisma.dataloggerSupplier.findFirst({ where: { type: 'GOODWE_CLOUD' } });
     if (dbSupplier) {
       account = dbSupplier.username || dbSupplier.appId || account;
-      pwd = dbSupplier.appSecret || dbSupplier.token || pwd;
+      pwd = dbSupplier.password || dbSupplier.token || dbSupplier.appSecret || pwd;
       console.log(INFO(`Credenciais GoodWe carregadas do banco (Conta: ${account}).`));
     }
   } catch (e) {}

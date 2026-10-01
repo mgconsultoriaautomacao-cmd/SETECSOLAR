@@ -2,7 +2,7 @@ const axios = require('axios');
 
 async function testGoodWeUser() {
   const account = 'setecsolarseg@gmail.com';
-  const pwd = '120687@Eli';
+  const pwd = 'Admin@123';
 
   const baseUrls = [
     'https://www.semsportal.com',
