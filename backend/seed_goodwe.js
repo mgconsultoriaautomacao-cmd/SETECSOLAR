@@ -17,7 +17,7 @@ async function seedGoodWe() {
   };
 
   try {
-    // 1. Tenta via Prisma Direct
+
     const existing = await prisma.dataloggerSupplier.findFirst({
       where: {
         OR: [
@@ -38,7 +38,7 @@ async function seedGoodWe() {
       console.log('Criando novo fornecedor GoodWe via Prisma...');
       const created = await prisma.dataloggerSupplier.create({
         data: supplierData
-      }); 
+      });
       console.log('✅ Criado via Prisma:', created);
     }
   } catch (err) {

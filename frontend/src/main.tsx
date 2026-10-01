@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import { AppProvider } from './context/AppContext.tsx'
+import { AuthProvider } from './context/AuthContext.tsx'
 import theme from './theme/theme.ts'
 import App from './App.tsx'
 import './index.css'
@@ -16,11 +17,13 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <AppProvider>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </AppProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   </StrictMode>,

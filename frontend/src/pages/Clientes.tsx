@@ -45,7 +45,7 @@ export default function Clientes() {
     document: '',
     phone: '',
     email: '',
-    password: 'setec2026',
+    password: '',
     zipCode: '',
     address: '',
     city: '',
@@ -92,7 +92,7 @@ export default function Clientes() {
       document: '',
       phone: '',
       email: '',
-      password: 'setec2026',
+      password: '',
       zipCode: '',
       address: '',
       city: '',
@@ -109,7 +109,7 @@ export default function Clientes() {
       document: client.document,
       phone: client.phone,
       email: client.email,
-      password: (client as any).password || 'setec2026',
+      password: '',
       zipCode: client.zipCode || '',
       address: client.address || '',
       city: client.city,
@@ -300,13 +300,14 @@ export default function Clientes() {
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label="Senha de Acesso do Cliente"
-                type="text"
+                label="Senha Inicial / Temporária"
+                type="password"
                 fullWidth
+                placeholder="Deixe em branco para gerar no primeiro acesso"
                 value={clientForm.password}
                 onChange={(e) => setClientForm({ ...clientForm, password: e.target.value })}
                 slotProps={{ inputLabel: { shrink: true } }}
-                helperText="Senha padrão: setec2026"
+                helperText="O cliente receberá instruções para cadastrar sua senha pessoal no primeiro acesso."
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 4 }}>
@@ -388,7 +389,7 @@ export default function Clientes() {
               <Paper className="p-4 bg-slate-900 border border-slate-800 space-y-2 font-mono text-sm">
                 <div><span className="text-slate-500">Cliente:</span> <strong>{selectedClientForAccess.name}</strong></div>
                 <div><span className="text-slate-500">E-mail (Login):</span> <strong className="text-amber-400">{selectedClientForAccess.email}</strong></div>
-                <div><span className="text-slate-500">Senha:</span> <strong className="text-emerald-400">{(selectedClientForAccess as any).password || 'setec2026'}</strong></div>
+                <div><span className="text-slate-500">Acesso:</span> <strong className="text-emerald-400">Primeiro acesso por link seguro</strong></div>
                 <div><span className="text-slate-500">Link do App:</span> <strong className="text-blue-400">https://setecsolar.vercel.app</strong></div>
               </Paper>
             </Box>
@@ -403,9 +404,9 @@ export default function Clientes() {
                 color="info"
                 startIcon={<ContentCopyIcon />}
                 onClick={() => {
-                  const text = `Olá ${selectedClientForAccess.name}!\n\nSeu acesso ao aplicativo de monitoramento solar da SETEC Solar já está ativo! ☀️\n\nDados de Acesso:\nE-mail: ${selectedClientForAccess.email}\nSenha: ${(selectedClientForAccess as any).password || 'setec2026'}\nAcesse por aqui: https://setecsolar.vercel.app`;
+                  const text = `Olá ${selectedClientForAccess.name}!\n\nSeu acesso ao portal de monitoramento da SETEC Solar foi liberado! ☀️\n\nDados para Acesso:\nE-mail: ${selectedClientForAccess.email}\nLink de Acesso: https://setecsolar.vercel.app\n\nNo primeiro login, utilize seu e-mail cadastrado para definir sua senha com segurança.`;
                   navigator.clipboard.writeText(text);
-                  alert('Credenciais copiadas para a área de transferência!');
+                  alert('Instruções de acesso copiadas para a área de transferência!');
                 }}
               >
                 Copiar
@@ -417,9 +418,9 @@ export default function Clientes() {
                 onClick={() => {
                   const phoneClean = selectedClientForAccess.phone.replace(/\D/g, '');
                   const text = encodeURIComponent(
-                    `Olá *${selectedClientForAccess.name}*!\n\nSeu acesso ao aplicativo de monitoramento solar da *SETEC Solar* já está ativo! ☀️\n\n*Dados de Acesso:*\n📧 *E-mail:* ${selectedClientForAccess.email}\n🔑 *Senha:* ${(selectedClientForAccess as any).password || 'setec2026'}\n🌐 *Acesse por aqui:* https://setecsolar.vercel.app\n\nQualquer dúvida estamos à disposição!`
+                    `Olá *${selectedClientForAccess.name}*!\n\nSeu acesso ao aplicativo de monitoramento solar da *SETEC Solar* já está ativo! ☀️\n\n*Dados de Acesso:*\n📧 *E-mail:* ${selectedClientForAccess.email}\n🌐 *Acesse por aqui:* https://setecsolar.vercel.app\n\nNo primeiro acesso, utilize o link para cadastrar sua senha pessoal com segurança.\n\nQualquer dúvida estamos à disposição!`
                   );
-                  window.open(`https://wa.me/55${phoneClean}?text=${text}`, '_blank');
+                  window.open(`https://wa.me/55${phoneClean}?text=${text}`, '_blank', 'noopener,noreferrer');
                 }}
               >
                 Enviar via WhatsApp

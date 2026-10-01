@@ -18,11 +18,7 @@ import LocationOnIcon from '@mui/icons-material/LocationOn';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import { useApp } from '../context/AppContext';
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3001/api'
-    : '/api');
+import { apiFetch } from '../lib/api';
 
 interface Ticket {
   id: string;
@@ -42,12 +38,6 @@ interface Ticket {
     state?: string;
   };
 }
-
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
-  'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-  'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
-});
 
 const categoryConfig = {
   MONITORING: { label: 'Monitoramento', color: '#60a5fa' },
@@ -84,14 +74,11 @@ export default function Chamados() {
 
   const fetchTickets = async () => {
     try {
-      const r = await fetch(`${API_URL}/tickets`, { headers: getHeaders() });
-      if (r.ok) {
-        const data = await r.json();
-        setTickets(data);
-        if (selectedTicket) {
-          const updated = data.find((t: Ticket) => t.id === selectedTicket.id);
-          if (updated) setSelectedTicket(updated);
-        }
+      const data = await apiFetch<Ticket[]>('/tickets');
+      setTickets(data || []);
+      if (selectedTicket) {
+        const updated = (data || []).find((t: Ticket) => t.id === selectedTicket.id);
+        if (updated) setSelectedTicket(updated);
       }
     } catch {
       // silent fail
@@ -104,9 +91,8 @@ export default function Chamados() {
 
   const handleSave = async () => {
     try {
-      await fetch(`${API_URL}/tickets`, {
+      await apiFetch('/tickets', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify(form),
       });
       await fetchTickets();
@@ -117,9 +103,8 @@ export default function Chamados() {
 
   const handleStatusChange = async (id: string, status: Ticket['status'], resolution?: string) => {
     try {
-      await fetch(`${API_URL}/tickets/${id}`, {
+      await apiFetch(`/tickets/${id}`, {
         method: 'PUT',
-        headers: getHeaders(),
         body: JSON.stringify({ status, resolution }),
       });
       await fetchTickets();
@@ -132,10 +117,8 @@ export default function Chamados() {
   const handleGenerateOS = async () => {
     if (!selectedTicket) return;
     try {
-      // Primeiro cria a O.S
-      const r = await fetch(`${API_URL}/work-orders`, {
+      const os = await apiFetch('/work-orders', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({
           clientId: selectedTicket.clientId,
           usinaId: usinas.find(u => u.clientId === selectedTicket.clientId)?.id || '',
@@ -145,12 +128,9 @@ export default function Chamados() {
           serviceType: 'CORRETIVA'
         }),
       });
-      if (r.ok) {
-        const os = await r.json();
-        // Atualiza o chamado com o ID da OS gerada
-        await fetch(`${API_URL}/tickets/${selectedTicket.id}`, {
+      if (os && os.id) {
+        await apiFetch(`/tickets/${selectedTicket.id}`, {
           method: 'PUT',
-          headers: getHeaders(),
           body: JSON.stringify({ workOrderId: os.id }),
         });
         await fetchTickets();

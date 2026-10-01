@@ -26,6 +26,8 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
 
+import { useAuth } from '../context/AuthContext';
+
 interface LayoutProps {
   children: React.ReactNode;
 }
@@ -48,6 +50,7 @@ export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -55,12 +58,13 @@ export default function Layout({ children }: LayoutProps) {
 
   const handleMenuClose = () => setAnchorEl(null);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     handleMenuClose();
+    await logout();
     navigate('/login');
   };
 
-  const userRole = localStorage.getItem('user_role') || 'CLIENTE';
+  const userRole = user?.role;
   
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('theme') || 'dark';
@@ -111,11 +115,11 @@ export default function Layout({ children }: LayoutProps) {
                   </li>
                 );
               })}
-              {['SUPER_ADMIN', 'GESTOR', 'OPERADOR'].includes(userRole) && (
+              {userRole && ['SUPER_ADMIN', 'GESTOR', 'OPERADOR'].includes(userRole) && (
                 <li className="sidebar-menu-item" style={{ marginTop: 'auto', borderTop: '1px solid var(--color-border)', paddingTop: '8px' }}>
                   <div
                     className="sidebar-link"
-                    onClick={() => window.open('/app-cliente', '_blank')}
+                    onClick={() => window.open('/app-cliente', '_blank', 'noopener,noreferrer')}
                     role="button"
                     tabIndex={0}
                   >
@@ -173,12 +177,12 @@ export default function Layout({ children }: LayoutProps) {
                   </li>
                 );
               })}
-              {['SUPER_ADMIN', 'GESTOR', 'OPERADOR'].includes(userRole) && (
+              {userRole && ['SUPER_ADMIN', 'GESTOR', 'OPERADOR'].includes(userRole) && (
                 <li className="sidebar-menu-item" style={{ marginTop: 'auto', borderTop: '1px solid var(--color-border)', paddingTop: '8px' }}>
                   <div
                     className="sidebar-link"
                     onClick={() => {
-                      window.open('/app-cliente', '_blank');
+                      window.open('/app-cliente', '_blank', 'noopener,noreferrer');
                       setMobileOpen(false);
                     }}
                     role="button"

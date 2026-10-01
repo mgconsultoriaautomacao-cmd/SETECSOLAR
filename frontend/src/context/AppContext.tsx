@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { apiFetch } from '../lib/api';
 
 export interface Client {
   id: string;
@@ -19,16 +20,16 @@ export interface Client {
 export interface Usina {
   id: string;
   name: string;
-  client?: string; // mapped from client relationship in backend
+  client?: string;
   clientId: string;
   capacityKwp: number;
   inverterCapacity: number;
   moduleCount: number;
   manufacturer: string;
   model: string;
-  utility: string; // maps to utilityCompany in backend
+  utility: string;
   estimatedKwh: number;
-  payback: number; // maps to paybackYears in backend
+  payback: number;
   status: 'ONLINE' | 'ALERT' | 'OFFLINE' | 'CRITICAL';
   gpsLatitude?: number | null;
   gpsLongitude?: number | null;
@@ -50,11 +51,10 @@ export interface Usina {
   readingLastUpdate?: string | null;
 }
 
-
 export interface DataloggerSupplier {
   id: string;
   name: string;
-  type: string; // "GROWATT_CLOUD" | "SOLARMAN_CLOUD" | "MODBUS_LOCAL" | "MOCK"
+  type: string;
   token?: string;
   appId?: string;
   appSecret?: string;
@@ -81,12 +81,6 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3001/api'
-    : '/api');
-
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useState<Client[]>([]);
   const [usinas, setUsinas] = useState<Usina[]>([]);
@@ -94,40 +88,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const fetchSuppliers = async () => {
     try {
-      const response = await fetch(`${API_URL}/datalogger-suppliers`, {
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSuppliers(data);
-      }
+      const data = await apiFetch<DataloggerSupplier[]>('/datalogger-suppliers');
+      setSuppliers(data || []);
     } catch (err) {
       console.error('Failed to fetch suppliers:', err);
     }
   };
 
-  const getHeaders = () => {
-    return {
-      'Content-Type': 'application/json',
-      'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-      'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
-    };
-  };
-
   const fetchClients = async () => {
     try {
-      const response = await fetch(`${API_URL}/clients`, {
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const formatted = data.map((c: any) => ({
-          ...c,
-          gpsLatitude: c.gpsLatitude !== null && c.gpsLatitude !== undefined ? Number(c.gpsLatitude) : -23.5505,
-          gpsLongitude: c.gpsLongitude !== null && c.gpsLongitude !== undefined ? Number(c.gpsLongitude) : -46.6333,
-        }));
-        setClients(formatted);
-      }
+      const data = await apiFetch<any[]>('/clients');
+      const formatted = (data || []).map((c: any) => ({
+        ...c,
+        gpsLatitude: c.gpsLatitude !== null && c.gpsLatitude !== undefined ? Number(c.gpsLatitude) : -23.5505,
+        gpsLongitude: c.gpsLongitude !== null && c.gpsLongitude !== undefined ? Number(c.gpsLongitude) : -46.6333,
+      }));
+      setClients(formatted);
     } catch (err) {
       console.error('Failed to fetch clients:', err);
     }
@@ -135,21 +111,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUsinas = async () => {
     try {
-      const response = await fetch(`${API_URL}/usinas`, {
-        headers: getHeaders(),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const formatted = data.map((u: any) => ({
-          ...u,
-          client: u.client?.name || 'Cliente Desconhecido',
-          utility: u.utilityCompany || '',
-          payback: u.paybackYears || 0,
-          gpsLatitude: u.gpsLatitude !== null && u.gpsLatitude !== undefined ? Number(u.gpsLatitude) : -23.5505,
-          gpsLongitude: u.gpsLongitude !== null && u.gpsLongitude !== undefined ? Number(u.gpsLongitude) : -46.6333,
-        }));
-        setUsinas(formatted);
-      }
+      const data = await apiFetch<any[]>('/usinas');
+      const formatted = (data || []).map((u: any) => ({
+        ...u,
+        client: u.client?.name || 'Cliente Desconhecido',
+        utility: u.utilityCompany || '',
+        payback: u.paybackYears || 0,
+        gpsLatitude: u.gpsLatitude !== null && u.gpsLatitude !== undefined ? Number(u.gpsLatitude) : -23.5505,
+        gpsLongitude: u.gpsLongitude !== null && u.gpsLongitude !== undefined ? Number(u.gpsLongitude) : -46.6333,
+      }));
+      setUsinas(formatted);
     } catch (err) {
       console.error('Failed to fetch usinas:', err);
     }
@@ -188,9 +159,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const coords = await getCoordinates(clientData.city, clientData.state, clientData.address);
 
     try {
-      const response = await fetch(`${API_URL}/clients`, {
+      await apiFetch('/clients', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({
           ...clientData,
           gpsLatitude: coords.lat,
@@ -198,12 +168,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           status: 'ACTIVE',
         }),
       });
-
-      if (response.ok) {
-        await fetchClients();
-      } else {
-        console.error('Server failed to create client:', response.statusText);
-      }
+      await fetchClients();
     } catch (err) {
       console.error('Failed to create client:', err);
     }
@@ -216,18 +181,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/clients/${id}`, {
+      await apiFetch(`/clients/${id}`, {
         method: 'PUT',
-        headers: getHeaders(),
         body: JSON.stringify({
           ...clientData,
           ...(coords.lat ? { gpsLatitude: coords.lat, gpsLongitude: coords.lon } : {}),
         }),
       });
-
-      if (response.ok) {
-        await fetchClients();
-      }
+      await fetchClients();
     } catch (err) {
       console.error('Failed to update client:', err);
     }
@@ -235,13 +196,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteClient = async (id: string) => {
     try {
-      const response = await fetch(`${API_URL}/clients/${id}`, {
+      await apiFetch(`/clients/${id}`, {
         method: 'DELETE',
-        headers: getHeaders(),
       });
-      if (response.ok) {
-        await refreshData();
-      }
+      await refreshData();
     } catch (err) {
       console.error('Failed to delete client:', err);
     }
@@ -251,7 +209,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let lat = usinaData.gpsLatitude;
     let lon = usinaData.gpsLongitude;
 
-    // Se o usuário NÃO informou coordenadas geográficas manualmente, tenta geocodificar por endereço/cidade
     if (lat === undefined || lat === null || lon === undefined || lon === null) {
       if (usinaData.city && usinaData.state) {
         const coords = await getCoordinates(usinaData.city, usinaData.state, usinaData.address);
@@ -268,7 +225,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Evita sobreposição exata de pinos se caiu no fallback aproximado
       if (usinas.some(u => Math.abs((u.gpsLatitude || 0) - lat!) < 0.0001 && Math.abs((u.gpsLongitude || 0) - lon!) < 0.0001)) {
         lat += (Math.random() - 0.5) * 0.015;
         lon += (Math.random() - 0.5) * 0.015;
@@ -276,9 +232,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/usinas`, {
+      await apiFetch('/usinas', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({
           ...usinaData,
           utilityCompany: usinaData.utility,
@@ -288,10 +243,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           status: usinaData.datalogger ? 'ONLINE' : 'OFFLINE',
         }),
       });
-
-      if (response.ok) {
-        await fetchUsinas();
-      }
+      await fetchUsinas();
     } catch (err) {
       console.error('Failed to create usina:', err);
     }
@@ -301,7 +253,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let lat = usinaData.gpsLatitude;
     let lon = usinaData.gpsLongitude;
 
-    // Apenas tenta geocodificar se lat/lon não foram especificados ou passados no objeto usinaData
     if ((lat === undefined || lat === null || lon === undefined || lon === null) && usinaData.city && usinaData.state) {
       const coords = await getCoordinates(usinaData.city, usinaData.state, usinaData.address);
       lat = coords.lat;
@@ -309,9 +260,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      const response = await fetch(`${API_URL}/usinas/${id}`, {
+      await apiFetch(`/usinas/${id}`, {
         method: 'PUT',
-        headers: getHeaders(),
         body: JSON.stringify({
           ...usinaData,
           utilityCompany: usinaData.utility,
@@ -319,10 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...(lat !== undefined ? { gpsLatitude: lat, gpsLongitude: lon } : {}),
         }),
       });
-
-      if (response.ok) {
-        await fetchUsinas();
-      }
+      await fetchUsinas();
     } catch (err) {
       console.error('Failed to update usina:', err);
     }
@@ -330,45 +277,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteUsina = async (id: string) => {
     try {
-      const response = await fetch(`${API_URL}/usinas/${id}`, {
+      await apiFetch(`/usinas/${id}`, {
         method: 'DELETE',
-        headers: getHeaders(),
       });
-      if (response.ok) {
-        await fetchUsinas();
-      }
+      await fetchUsinas();
     } catch (err) {
       console.error('Failed to delete usina:', err);
     }
   };
 
   const addTicket = async (ticketData: { clientId: string; category: string; title: string; description: string }) => {
-    try {
-      const response = await fetch(`${API_URL}/tickets`, {
-        method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(ticketData),
-      });
-      if (response.ok) {
-        return await response.json();
-      }
-      throw new Error('Failed to create ticket on server');
-    } catch (err) {
-      console.error('Failed to create ticket:', err);
-      throw err;
-    }
+    return apiFetch('/tickets', {
+      method: 'POST',
+      body: JSON.stringify(ticketData),
+    });
   };
 
   const addSupplier = async (supplierData: Omit<DataloggerSupplier, 'id'>) => {
     try {
-      const response = await fetch(`${API_URL}/datalogger-suppliers`, {
+      await apiFetch('/datalogger-suppliers', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify(supplierData),
       });
-      if (response.ok) {
-        await fetchSuppliers();
-      }
+      await fetchSuppliers();
     } catch (err) {
       console.error('Failed to create supplier:', err);
     }
@@ -376,14 +307,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateSupplier = async (id: string, supplierData: Partial<DataloggerSupplier>) => {
     try {
-      const response = await fetch(`${API_URL}/datalogger-suppliers/${id}`, {
+      await apiFetch(`/datalogger-suppliers/${id}`, {
         method: 'PUT',
-        headers: getHeaders(),
         body: JSON.stringify(supplierData),
       });
-      if (response.ok) {
-        await fetchSuppliers();
-      }
+      await fetchSuppliers();
     } catch (err) {
       console.error('Failed to update supplier:', err);
     }
@@ -391,13 +319,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteSupplier = async (id: string) => {
     try {
-      const response = await fetch(`${API_URL}/datalogger-suppliers/${id}`, {
+      await apiFetch(`/datalogger-suppliers/${id}`, {
         method: 'DELETE',
-        headers: getHeaders(),
       });
-      if (response.ok) {
-        await refreshData();
-      }
+      await refreshData();
     } catch (err) {
       console.error('Failed to delete supplier:', err);
     }

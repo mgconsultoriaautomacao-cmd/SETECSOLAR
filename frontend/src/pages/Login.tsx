@@ -1,37 +1,45 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import logoSetec from '../assets/logosetec.jpg';
-
-type Role = 'SUPER_ADMIN' | 'GESTOR' | 'OPERADOR' | 'TECNICO' | 'CLIENTE';
-
-const perfis: { value: Role; label: string; email: string }[] = [
-  { value: 'SUPER_ADMIN', label: 'Super Admin — Controle total', email: 'admin@setecsolar.com' },
-  { value: 'GESTOR',      label: 'Gestor — Clientes e financeiro', email: 'gestor@setecsolar.com' },
-  { value: 'OPERADOR',    label: 'Operador — Monitoramento / NOC', email: 'operador@setecsolar.com' },
-  { value: 'TECNICO',     label: 'Técnico — Chamados e manutenção', email: 'tecnico@setecsolar.com' },
-  { value: 'CLIENTE',     label: 'Cliente — Elionaldo (Usina Casa)', email: 'elionaldo@setec.com' },
-  { value: 'CLIENTE',     label: 'Cliente — Tadeu (Usina Tadeu Casa)', email: 'tadeu@setec.com' },
-  { value: 'CLIENTE',     label: 'Cliente — Bruno (Usina Bruno ABPS)', email: 'bruno@setec.com' },
-];
+import { useAuth } from '../context/AuthContext';
+import { CircularProgress } from '@mui/material';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@setecsolar.com');
+  const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [role, setRole] = useState<Role>('SUPER_ADMIN');
+  const [showPassword, setShowPassword] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
+
   const navigate = useNavigate();
+  const { login } = useAuth();
 
-  const handleRoleChange = (val: Role) => {
-    setRole(val);
-    const perfil = perfis.find(p => p.value === val);
-    if (perfil) setEmail(perfil.email);
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('user_role', role);
-    localStorage.setItem('user_email', email);
-    navigate(role === 'CLIENTE' ? '/app-cliente' : '/dashboard');
+    setErrorMsg(null);
+
+    if (!email || !senha) {
+      setErrorMsg('Por favor, informe seu e-mail e sua senha de acesso.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      const user = await login(email, senha);
+      if (user.role === 'CLIENTE') {
+        navigate('/app-cliente');
+      } else {
+        navigate('/dashboard');
+      }
+    } catch (err: any) {
+      console.error('Erro no login:', err);
+      setErrorMsg(err.message || 'E-mail ou senha incorretos.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -45,9 +53,15 @@ export default function Login() {
         <div style={styles.header}>
           <img src={logoSetec} alt="SETEC Solar" style={styles.logo} />
           <p style={styles.subtitle}>
-            Acesse o painel de monitoramento ou selecione um perfil para testar o sistema.
+            Acesse o painel de monitoramento fotovoltaico da SETEC Solar.
           </p>
         </div>
+
+        {errorMsg && (
+          <div style={styles.alertError}>
+            {errorMsg}
+          </div>
+        )}
 
         <form onSubmit={handleLogin} style={styles.form} noValidate>
           {/* E-mail */}
@@ -64,55 +78,67 @@ export default function Login() {
                 ...styles.input,
                 ...(focusedField === 'email' ? styles.inputFocused : {}),
               }}
-              placeholder="seu@email.com"
+              placeholder="seu.email@setecsolar.com"
               required
             />
           </div>
 
           {/* Senha */}
           <div style={styles.fieldGroup}>
-            <label htmlFor="login-senha" style={styles.label}>Senha</label>
-            <input
-              id="login-senha"
-              type="password"
-              value={senha}
-              onChange={e => setSenha(e.target.value)}
-              onFocus={() => setFocusedField('senha')}
-              onBlur={() => setFocusedField(null)}
-              style={{
-                ...styles.input,
-                ...(focusedField === 'senha' ? styles.inputFocused : {}),
-              }}
-              placeholder="••••••••"
-            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label htmlFor="login-senha" style={styles.label}>Senha</label>
+              <button
+                type="button"
+                disabled
+                style={{ fontSize: '11px', color: '#6e7681', cursor: 'not-allowed' }}
+                title="Entre em contato com o suporte para redefinir sua senha"
+              >
+                Esqueci minha senha
+              </button>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <input
+                id="login-senha"
+                type={showPassword ? 'text' : 'password'}
+                value={senha}
+                onChange={e => setSenha(e.target.value)}
+                onFocus={() => setFocusedField('senha')}
+                onBlur={() => setFocusedField(null)}
+                style={{
+                  ...styles.input,
+                  paddingRight: '40px',
+                  ...(focusedField === 'senha' ? styles.inputFocused : {}),
+                }}
+                placeholder="••••••••"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={styles.eyeBtn}
+                aria-label="Mostrar ou ocultar senha"
+              >
+                {showPassword ? <VisibilityOff style={{ fontSize: 18, color: '#8b929c' }} /> : <Visibility style={{ fontSize: 18, color: '#8b929c' }} />}
+              </button>
+            </div>
           </div>
 
-          {/* Perfil de acesso */}
-          <div style={styles.fieldGroup}>
-            <label htmlFor="login-perfil" style={styles.label}>
-              Perfil de acesso
-              <span style={styles.labelTag}>simulação</span>
-            </label>
-            <select
-              id="login-perfil"
-              value={role}
-              onChange={e => handleRoleChange(e.target.value as Role)}
-              onFocus={() => setFocusedField('perfil')}
-              onBlur={() => setFocusedField(null)}
-              style={{
-                ...styles.input,
-                ...styles.select,
-                ...(focusedField === 'perfil' ? styles.inputFocused : {}),
-              }}
-            >
-              {perfis.map(p => (
-                <option key={p.value} value={p.value}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-
-          <button type="submit" style={styles.btn} id="btn-entrar">
-            Entrar no sistema
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            style={{
+              ...styles.btn,
+              ...(isSubmitting ? styles.btnDisabled : {}),
+            }}
+            id="btn-entrar"
+          >
+            {isSubmitting ? (
+              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <CircularProgress size={16} color="inherit" /> Autenticando...
+              </span>
+            ) : (
+              'Entrar no sistema'
+            )}
           </button>
         </form>
 
@@ -124,7 +150,6 @@ export default function Login() {
   );
 }
 
-// Estilos em objeto para manter o CSS junto ao componente e facilitar manutenção
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100svh',
@@ -161,10 +186,10 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     gap: '16px',
-    marginBottom: '32px',
+    marginBottom: '24px',
   },
   logo: {
-    height: 'clamp(64px, 15vw, 120px)',
+    height: 'clamp(64px, 15vw, 110px)',
     width: 'auto',
     objectFit: 'contain',
     mixBlendMode: 'screen',
@@ -177,10 +202,20 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: '320px',
     margin: 0,
   },
+  alertError: {
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+    color: '#f87171',
+    padding: '10px 14px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    marginBottom: '20px',
+    lineHeight: 1.5,
+  },
   form: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '20px',
+    gap: '18px',
   },
   fieldGroup: {
     display: 'flex',
@@ -191,20 +226,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '13px',
     fontWeight: 500,
     color: '#c9d1d9',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  labelTag: {
-    fontSize: '10px',
-    fontWeight: 600,
-    color: '#ff6b00',
-    backgroundColor: 'rgba(255, 107, 0, 0.12)',
-    border: '1px solid rgba(255, 107, 0, 0.25)',
-    borderRadius: '4px',
-    padding: '1px 6px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
   },
   input: {
     width: '100%',
@@ -223,16 +244,21 @@ const styles: Record<string, React.CSSProperties> = {
     borderColor: '#ff6b00',
     boxShadow: '0 0 0 3px rgba(255, 107, 0, 0.15)',
   },
-  select: {
+  eyeBtn: {
+    position: 'absolute',
+    right: '10px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'none',
+    border: 'none',
+    padding: '4px',
     cursor: 'pointer',
-    appearance: 'none',
-    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b929c' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 14px center',
-    paddingRight: '36px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   btn: {
-    marginTop: '4px',
+    marginTop: '6px',
     padding: '13px 24px',
     background: 'linear-gradient(135deg, #e66000 0%, #ff6b00 50%, #ff8c00 100%)',
     color: '#fff',
@@ -244,6 +270,10 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '0.3px',
     transition: 'opacity 0.2s, transform 0.1s',
     fontFamily: 'inherit',
+  },
+  btnDisabled: {
+    opacity: 0.7,
+    cursor: 'not-allowed',
   },
   footer: {
     marginTop: '28px',

@@ -15,6 +15,10 @@ import Chamados from './pages/Chamados';
 import Relatorios from './pages/Relatorios';
 import Tickets from './pages/Tickets';
 import Configuracoes from './pages/Configuracoes';
+import Unauthorized from './pages/Unauthorized';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { useAuth } from './context/AuthContext';
+import { apiFetch } from './lib/api';
 import { Box, Typography, Button, Paper, IconButton, Chip } from '@mui/material';
 import { useApp } from './context/AppContext';
 import {
@@ -173,9 +177,10 @@ const mockUsinasDefault = [
 function AppCliente() {
   const navigate = useNavigate();
   const { clients, usinas, addUsina, addTicket } = useApp();
+  const { user, logout } = useAuth();
 
-  const clientEmail = localStorage.getItem('user_email') || 'cliente@usinasolar.com';
-  const isCliente = localStorage.getItem('user_role') === 'CLIENTE';
+  const clientEmail = user?.email || '';
+  const isCliente = user?.role === 'CLIENTE';
 
   // Selected client state (allows switching between clients in simulation or auto-bound to logged user)
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -371,24 +376,14 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
   useEffect(() => {
     const fetchLiveReadings = async () => {
       try {
-        const API_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:3001/api' : '/api');
-        const res = await fetch(`${API_URL}/solarman/readings`, {
-          headers: {
-            'Content-Type': 'application/json',
-            'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-            'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
-          }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const map: Record<string, any> = {};
-          if (Array.isArray(data)) {
-            data.forEach((r: any) => {
-              if (r.usinaId) map[r.usinaId] = r;
-            });
-          }
-          setTelemetryReadings(map);
+        const data = await apiFetch<any[]>('/solarman/readings');
+        const map: Record<string, any> = {};
+        if (Array.isArray(data)) {
+          data.forEach((r: any) => {
+            if (r.usinaId) map[r.usinaId] = r;
+          });
         }
+        setTelemetryReadings(map);
       } catch (err) {
         console.error('Failed to fetch live solar readings:', err);
       }
@@ -1505,9 +1500,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
 
                 {/* Logout Button */}
                 <div
-                  onClick={() => {
-                    localStorage.removeItem('user_role');
-                    localStorage.removeItem('user_email');
+                  onClick={async () => {
+                    await logout();
                     navigate('/login');
                   }}
                   className={`px-4 py-3 flex items-center justify-between cursor-pointer transition-colors text-rose-500 hover:bg-rose-500/5`}
@@ -2445,37 +2439,45 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
   );
 }
 
-// Wrapper to require layout for admin views
-function AdminWrapper({ children }: { children: React.ReactNode }) {
-  const role = localStorage.getItem('user_role');
-  if (!role || role === 'CLIENTE') {
-    return <Navigate to="/login" replace />;
-  }
-  return <Layout>{children}</Layout>;
+// Wrapper to require layout and admin role check
+function AdminWrapper({ children, roles = ['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO'] }: { children: React.ReactNode; roles?: ('SUPER_ADMIN' | 'GESTOR' | 'OPERADOR' | 'TECNICO' | 'CLIENTE')[] }) {
+  return (
+    <ProtectedRoute roles={roles}>
+      <Layout>{children}</Layout>
+    </ProtectedRoute>
+  );
 }
 
 export default function App() {
   return (
     <Routes>
-      {/* Rota inicial agora é a tela de login */}
+      {/* Rota inicial redireciona para login */}
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/403" element={<Unauthorized />} />
 
       {/* Rotas administrativas protegidas */}
       <Route path="/dashboard" element={<AdminWrapper><Dashboard /></AdminWrapper>} />
-      <Route path="/clientes" element={<AdminWrapper><Clientes /></AdminWrapper>} />
-      <Route path="/usinas" element={<AdminWrapper><Usinas /></AdminWrapper>} />
-      <Route path="/noc" element={<AdminWrapper><Noc /></AdminWrapper>} />
-      <Route path="/faturas" element={<AdminWrapper><Faturas /></AdminWrapper>} />
-      <Route path="/financeiro" element={<AdminWrapper><Financeiro /></AdminWrapper>} />
-      <Route path="/manutencao" element={<AdminWrapper><Manutencao /></AdminWrapper>} />
-      <Route path="/chamados" element={<AdminWrapper><Chamados /></AdminWrapper>} />
-      <Route path="/tickets" element={<AdminWrapper><Tickets /></AdminWrapper>} />
-      <Route path="/relatorios" element={<AdminWrapper><Relatorios /></AdminWrapper>} />
-      <Route path="/configuracoes" element={<AdminWrapper><Configuracoes /></AdminWrapper>} />
+      <Route path="/clientes" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR']}><Clientes /></AdminWrapper>} />
+      <Route path="/usinas" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO']}><Usinas /></AdminWrapper>} />
+      <Route path="/noc" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO']}><Noc /></AdminWrapper>} />
+      <Route path="/faturas" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR']}><Faturas /></AdminWrapper>} />
+      <Route path="/financeiro" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR']}><Financeiro /></AdminWrapper>} />
+      <Route path="/manutencao" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO']}><Manutencao /></AdminWrapper>} />
+      <Route path="/chamados" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO']}><Chamados /></AdminWrapper>} />
+      <Route path="/tickets" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO']}><Tickets /></AdminWrapper>} />
+      <Route path="/relatorios" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO']}><Relatorios /></AdminWrapper>} />
+      <Route path="/configuracoes" element={<AdminWrapper roles={['SUPER_ADMIN', 'GESTOR']}><Configuracoes /></AdminWrapper>} />
 
       {/* Rota dedicada do cliente */}
-      <Route path="/app-cliente" element={<AppCliente />} />
+      <Route
+        path="/app-cliente"
+        element={
+          <ProtectedRoute roles={['SUPER_ADMIN', 'GESTOR', 'OPERADOR', 'TECNICO', 'CLIENTE']}>
+            <AppCliente />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }

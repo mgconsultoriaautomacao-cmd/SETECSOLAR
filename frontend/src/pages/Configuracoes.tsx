@@ -8,7 +8,10 @@ import {
   DialogActions,
   IconButton,
   Tooltip,
+  Alert,
+  Box,
 } from '@mui/material';
+import { apiFetch } from '../lib/api';
 import PersonIcon from '@mui/icons-material/Person';
 import TuneIcon from '@mui/icons-material/Tune';
 import NotificationsIcon from '@mui/icons-material/Notifications';
@@ -48,6 +51,50 @@ const NAV_SECTIONS = [
 
 export default function Configuracoes() {
   const [section, setSection] = useState('predef');
+
+  // ── Acesso e Segurança (Alterar Senha) ────────────────────────────────────
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordStatus, setPasswordStatus] = useState<{ type: 'error' | 'success' | 'info'; text: string } | null>(null);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordStatus(null);
+
+    if (!currentPassword) {
+      setPasswordStatus({ type: 'error', text: 'Informe sua senha atual.' });
+      return;
+    }
+    if (newPassword.length < 10) {
+      setPasswordStatus({ type: 'error', text: 'A nova senha deve ter no mínimo 10 caracteres.' });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordStatus({ type: 'error', text: 'A confirmação de senha não coincide com a nova senha.' });
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      await apiFetch('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      setPasswordStatus({ type: 'success', text: 'Senha atualizada com sucesso!' });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch {
+      setPasswordStatus({
+        type: 'info',
+        text: 'O serviço de alteração de senha ainda não está implementado na API do backend. Contate o administrador do sistema.',
+      });
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   // ── Predefinições de Usinas ────────────────────────────────────────────────
   const [predefs, setPredefs] = useState<Predef[]>([
@@ -295,17 +342,59 @@ export default function Configuracoes() {
             <div className="profile-section">
               <div className="profile-card">
                 <h2 className="profile-card-title">Alterar Senha</h2>
-                <div className="profile-form-grid">
-                  <TextField label="Senha Atual" type="password" fullWidth slotProps={{ inputLabel: { shrink: true } }} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)' } }} />
-                  <div />
-                  <TextField label="Nova Senha" type="password" fullWidth slotProps={{ inputLabel: { shrink: true } }} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)' } }} />
-                  <TextField label="Confirmar Nova Senha" type="password" fullWidth slotProps={{ inputLabel: { shrink: true } }} sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)' } }} />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-                  <Button variant="contained" sx={{ bgcolor: '#f57c00', '&:hover': { bgcolor: '#e64a19' }, fontWeight: 700 }}>
-                    Atualizar Senha
-                  </Button>
-                </div>
+
+                {passwordStatus && (
+                  <Box sx={{ mb: 3 }}>
+                    <Alert severity={passwordStatus.type}>
+                      {passwordStatus.text}
+                    </Alert>
+                  </Box>
+                )}
+
+                <form onSubmit={handleChangePassword}>
+                  <div className="profile-form-grid">
+                    <TextField
+                      label="Senha Atual"
+                      type="password"
+                      fullWidth
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)' } }}
+                    />
+                    <div />
+                    <TextField
+                      label="Nova Senha"
+                      type="password"
+                      fullWidth
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      helperText="Mínimo de 10 caracteres"
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)' } }}
+                    />
+                    <TextField
+                      label="Confirmar Nova Senha"
+                      type="password"
+                      fullWidth
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      slotProps={{ inputLabel: { shrink: true } }}
+                      helperText="Deve coincidir com a nova senha"
+                      sx={{ '& .MuiOutlinedInput-root': { bgcolor: 'var(--color-bg-dark)' } }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      disabled={isChangingPassword}
+                      sx={{ bgcolor: '#f57c00', '&:hover': { bgcolor: '#e64a19' }, fontWeight: 700 }}
+                    >
+                      {isChangingPassword ? 'Atualizando...' : 'Atualizar Senha'}
+                    </Button>
+                  </div>
+                </form>
               </div>
             </div>
           </>

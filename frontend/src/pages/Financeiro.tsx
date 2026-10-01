@@ -24,6 +24,7 @@ import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 import { useApp } from '../context/AppContext';
 import { SolarLoader } from '../components/SolarLoader';
+import { apiFetch } from '../lib/api';
 
 interface FinancialRecord {
   id: string;
@@ -135,46 +136,21 @@ export default function Financeiro() {
   const [mockEmail, setMockEmail] = useState('');
   const [mockName, setMockName] = useState('');
 
-  const API_URL =
-    import.meta.env.VITE_API_URL ||
-    (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-      ? 'http://localhost:3001/api'
-      : '/api');
-
-  const getHeaders = () => {
-    return {
-      'Content-Type': 'application/json',
-      'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-      'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
-    };
-  };
-
   const fetchRecords = async () => {
     try {
-      const response = await fetch(`${API_URL}/financial`, {
-        headers: getHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setRecords(data);
-      }
+      const data = await apiFetch<FinancialRecord[]>('/financial');
+      setRecords(data || []);
     } catch (err) {
       console.error('Erro ao buscar registros financeiros:', err);
     }
   };
 
-
   const fetchGmailAccounts = async () => {
     try {
-      const response = await fetch(`${API_URL}/gmail/accounts`, {
-        headers: getHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setGmailAccounts(data);
-        if (data.length > 0 && !selectedGmail) {
-          setSelectedGmail(data[0].email);
-        }
+      const data = await apiFetch<GmailAccount[]>('/gmail/accounts');
+      setGmailAccounts(data || []);
+      if (data && data.length > 0 && !selectedGmail) {
+        setSelectedGmail(data[0].email);
       }
     } catch (err) {
       console.error('Erro ao buscar contas Gmail:', err);
@@ -183,11 +159,8 @@ export default function Financeiro() {
 
   const checkDemoMode = async () => {
     try {
-      const response = await fetch(`${API_URL}/gmail/auth-url`, {
-        headers: getHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
+      const data = await apiFetch<{ demo: boolean }>('/gmail/auth-url');
+      if (data) {
         setIsDemo(data.demo);
       }
     } catch (err) {
@@ -199,13 +172,8 @@ export default function Financeiro() {
     if (!email) return;
     setLoadingEmails(true);
     try {
-      const response = await fetch(`${API_URL}/gmail/emails/${encodeURIComponent(email)}`, {
-        headers: getHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setEmails(data);
-      }
+      const data = await apiFetch<GmailEmail[]>(`/gmail/emails/${encodeURIComponent(email)}`);
+      setEmails(data || []);
     } catch (err) {
       console.error('Erro ao buscar e-mails:', err);
     } finally {
@@ -245,97 +213,82 @@ export default function Financeiro() {
     }
   }, []);
 
+
   const handleSaveRecord = async () => {
     if (!modalForm.description || !modalForm.amount || !modalForm.dueDate) {
-      alert('Descrição, valor e data de vencimento são obrigatórios.');
+      alert('Preencha os campos obrigatórios.');
       return;
     }
 
-    const url = editingRecord 
-      ? `${API_URL}/financial/${editingRecord.id}` 
-      : `${API_URL}/financial`;
+    const path = editingRecord 
+      ? `/financial/${editingRecord.id}` 
+      : `/financial`;
     const method = editingRecord ? 'PUT' : 'POST';
 
     try {
-      const response = await fetch(url, {
+      await apiFetch(path, {
         method,
-        headers: getHeaders(),
         body: JSON.stringify({
           ...modalForm,
           amount: parseFloat(modalForm.amount),
         }),
       });
 
-      if (response.ok) {
-        setOpenModal(false);
-        setEditingRecord(null);
-        setModalForm({
-          type: 'RECEBER',
-          description: '',
-          amount: '',
-          dueDate: '',
-          entryDate: '',
-          status: 'PENDENTE',
-          supplierOrClient: '',
-          ticketInfo: '',
-          observations: '',
-          clientId: '',
-        });
-        fetchRecords();
-      } else {
-        alert('Erro ao salvar registro.');
-      }
+      setOpenModal(false);
+      setEditingRecord(null);
+      setModalForm({
+        type: 'RECEBER',
+        description: '',
+        amount: '',
+        dueDate: '',
+        entryDate: '',
+        status: 'PENDENTE',
+        supplierOrClient: '',
+        ticketInfo: '',
+        observations: '',
+        clientId: '',
+      });
+      fetchRecords();
     } catch (err) {
       console.error('Erro ao salvar registro:', err);
+      alert('Erro ao salvar registro.');
     }
   };
 
   const handleDeleteRecord = async (id: string) => {
     if (!confirm('Deseja realmente excluir este registro?')) return;
     try {
-      const response = await fetch(`${API_URL}/financial/${id}`, {
+      await apiFetch(`/financial/${id}`, {
         method: 'DELETE',
-        headers: getHeaders(),
       });
-      if (response.ok) {
-        fetchRecords();
-      } else {
-        alert('Erro ao deletar registro.');
-      }
+      fetchRecords();
     } catch (err) {
       console.error('Erro ao deletar:', err);
+      alert('Erro ao deletar registro.');
     }
   };
 
   const handleMarkAsPaid = async (record: FinancialRecord) => {
     try {
-      const response = await fetch(`${API_URL}/financial/${record.id}`, {
+      await apiFetch(`/financial/${record.id}`, {
         method: 'PUT',
-        headers: getHeaders(),
         body: JSON.stringify({
           status: 'PAGO',
           paymentDate: new Date().toISOString().split('T')[0],
         }),
       });
-      if (response.ok) {
-        fetchRecords();
-      } else {
-        alert('Erro ao atualizar status.');
-      }
+      fetchRecords();
     } catch (err) {
       console.error('Erro ao marcar como pago:', err);
+      alert('Erro ao atualizar status.');
     }
   };
 
-
   const handleConnectGmail = async () => {
     try {
-      const response = await fetch(`${API_URL}/gmail/auth-url`, {
-        headers: getHeaders()
-      });
-      if (response.ok) {
-        const { url } = await response.json();
-        window.location.href = url;
+      const data = await apiFetch<{ url: string }>('/gmail/auth-url');
+      if (data && data.url) {
+        window.location.href = data.url;
       }
     } catch (err) {
       console.error('Erro ao conectar Gmail:', err);
@@ -343,20 +296,20 @@ export default function Financeiro() {
   };
 
   const handleCreateMockAccount = async (email: string, name?: string) => {
+    if (!import.meta.env.DEV) {
+      console.warn('Contas mock são restritas ao ambiente de desenvolvimento.');
+      return;
+    }
     try {
-      const response = await fetch(`${API_URL}/gmail/mock-account`, {
+      const account = await apiFetch<any>('/gmail/mock-account', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({ email, name }),
       });
-      if (response.ok) {
-        const account = await response.json();
-        fetchGmailAccounts();
-        setSelectedGmail(account.email);
-        setOpenMockModal(false);
-        setMockEmail('');
-        setMockName('');
-      }
+      fetchGmailAccounts();
+      if (account?.email) setSelectedGmail(account.email);
+      setOpenMockModal(false);
+      setMockEmail('');
+      setMockName('');
     } catch (err) {
       console.error('Erro ao criar conta mock:', err);
     }
@@ -365,16 +318,13 @@ export default function Financeiro() {
   const handleDisconnectGmail = async (id: string) => {
     if (!confirm('Deseja realmente desconectar esta conta de e-mail?')) return;
     try {
-      const response = await fetch(`${API_URL}/gmail/accounts/${id}`, {
+      await apiFetch(`/gmail/accounts/${id}`, {
         method: 'DELETE',
-        headers: getHeaders(),
       });
-      if (response.ok) {
-        fetchGmailAccounts();
-        if (gmailAccounts.length <= 1) {
-          setSelectedGmail('');
-          setEmails([]);
-        }
+      fetchGmailAccounts();
+      if (gmailAccounts.length <= 1) {
+        setSelectedGmail('');
+        setEmails([]);
       }
     } catch (err) {
       console.error('Erro ao desconectar conta:', err);
@@ -1012,13 +962,13 @@ export default function Financeiro() {
                       Desconectar Conta
                     </Button>
                   )}
-                  {isDemo ? (
+                  {isDemo && import.meta.env.DEV ? (
                     <Button
                       variant="contained"
                       onClick={() => setOpenMockModal(true)}
                       sx={{ bgcolor: 'var(--color-primary-orange)', '&:hover': { bgcolor: 'var(--color-primary-orange-hover)' }, fontWeight: 700 }}
                     >
-                      + Adicionar Conta Gmail
+                      + Adicionar Conta Gmail (Mock DEV)
                     </Button>
                   ) : (
                     <Button

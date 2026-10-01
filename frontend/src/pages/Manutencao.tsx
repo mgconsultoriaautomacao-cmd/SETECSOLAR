@@ -20,11 +20,6 @@ import MapIcon from '@mui/icons-material/Map';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { useApp } from '../context/AppContext';
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3001/api'
-    : '/api');
 
 interface WorkOrderPart {
   id: string;
@@ -57,11 +52,7 @@ interface WorkOrder {
   technician?: { name: string; phone?: string };
 }
 
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
-  'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-  'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
-});
+import { apiFetch } from '../lib/api';
 
 const statusConfig = {
   OPEN:           { label: 'Aberta',          icon: <PendingIcon />,      color: '#64748b' },
@@ -96,14 +87,11 @@ export default function Manutencao() {
 
   const fetchOrders = async () => {
     try {
-      const r = await fetch(`${API_URL}/work-orders`, { headers: getHeaders() });
-      if (r.ok) {
-        const data = await r.json();
-        setOrders(data);
-        if (selectedOrder) {
-          const updated = data.find((o: WorkOrder) => o.id === selectedOrder.id);
-          if (updated) setSelectedOrder(updated);
-        }
+      const data = await apiFetch<WorkOrder[]>('/work-orders');
+      setOrders(data || []);
+      if (selectedOrder) {
+        const updated = (data || []).find((o: WorkOrder) => o.id === selectedOrder.id);
+        if (updated) setSelectedOrder(updated);
       }
     } catch {
       // fallback to empty
@@ -116,9 +104,8 @@ export default function Manutencao() {
 
   const handleSave = async () => {
     try {
-      await fetch(`${API_URL}/work-orders`, {
+      await apiFetch('/work-orders', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify(form),
       });
       await fetchOrders();
@@ -135,9 +122,8 @@ export default function Manutencao() {
         payload.laborCost = laborCost;
         payload.completedAt = new Date().toISOString();
       }
-      await fetch(`${API_URL}/work-orders/${id}`, {
+      await apiFetch(`/work-orders/${id}`, {
         method: 'PUT',
-        headers: getHeaders(),
         body: JSON.stringify(payload),
       });
       await fetchOrders();
@@ -147,9 +133,8 @@ export default function Manutencao() {
   const handleAddPart = async () => {
     if (!selectedOrder) return;
     try {
-      await fetch(`${API_URL}/work-orders/${selectedOrder.id}/parts`, {
+      await apiFetch(`/work-orders/${selectedOrder.id}/parts`, {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify(newPart),
       });
       setNewPart({ description: '', quantity: 1, unit: 'un', unitCost: 0 });
@@ -160,9 +145,8 @@ export default function Manutencao() {
   const handleRemovePart = async (partId: string) => {
     if (!selectedOrder) return;
     try {
-      await fetch(`${API_URL}/work-orders/${selectedOrder.id}/parts/${partId}`, {
+      await apiFetch(`/work-orders/${selectedOrder.id}/parts/${partId}`, {
         method: 'DELETE',
-        headers: getHeaders(),
       });
       await fetchOrders();
     } catch (e) { console.error(e); }
@@ -388,7 +372,7 @@ export default function Manutencao() {
                           variant="outlined" 
                           size="small" 
                           sx={{ mt: 1 }}
-                          onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedOrder.usina?.gpsLatitude},${selectedOrder.usina?.gpsLongitude}`, '_blank')}
+                          onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${selectedOrder.usina?.gpsLatitude},${selectedOrder.usina?.gpsLongitude}`, '_blank', 'noopener,noreferrer')}
                         >
                           Abrir no Google Maps
                         </Button>

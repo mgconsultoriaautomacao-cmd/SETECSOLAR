@@ -44,16 +44,7 @@ import VisibilityOff from '@mui/icons-material/VisibilityOff';
 import { useApp, type Usina } from '../context/AppContext';
 import { SolarLoader } from '../components/SolarLoader';
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3001/api'
-    : '/api');
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
-  'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-  'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
-});
+import { apiFetch } from '../lib/api';
 
 export default function Usinas() {
   const { usinas, clients, addUsina, updateUsina, deleteUsina, suppliers, addSupplier, updateSupplier, deleteSupplier, refreshData } = useApp();
@@ -151,12 +142,10 @@ export default function Usinas() {
 
 
     try {
-      const r = await fetch(`${API_URL}${endpoint}`, {
+      const data = await apiFetch(endpoint, {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({ supplierId }),
       });
-      const data = await r.json();
       setSyncResult(data);
       await refreshData();
     } catch (err: any) {
@@ -242,15 +231,21 @@ export default function Usinas() {
 
   const detectPublicIp = async () => {
     setDetectingIp(true);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     try {
-      const response = await fetch('https://api.ipify.org?format=json');
-      const data = await response.json();
-      if (data && data.ip) {
-        setMonitorIp(data.ip);
+      const response = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.ip) {
+          setMonitorIp(data.ip);
+        }
       }
-    } catch (err) {
-      console.error('Erro ao detectar IP público:', err);
+    } catch {
+      console.warn('Não foi possível obter o IP público via api.ipify.org. Preencha o IP manualmente.');
     } finally {
+      clearTimeout(timeoutId);
       setDetectingIp(false);
     }
   };
@@ -277,12 +272,10 @@ export default function Usinas() {
     setTestLoading(true);
     setTestResult(null);
     try {
-      const r = await fetch(`${API_URL}/solarman/test`, {
+      const result = await apiFetch('/solarman/test', {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({ ip: monitorIp, sn: monitorSn, supplierId: monitorSupplierId }),
       });
-      const result = await r.json();
       setTestResult(result);
     } catch {
       setTestResult({ success: false, message: 'Erro ao contactar o servidor. O backend está rodando?' });
@@ -295,15 +288,12 @@ export default function Usinas() {
     if (!monitorUsina) return;
     setActivateLoading(true);
     try {
-      const r = await fetch(`${API_URL}/solarman/activate/${monitorUsina.id}`, {
+      const result = await apiFetch(`/solarman/activate/${monitorUsina.id}`, {
         method: 'POST',
-        headers: getHeaders(),
         body: JSON.stringify({ ip: monitorIp, sn: monitorSn, supplierId: monitorSupplierId }),
       });
-      const result = await r.json();
       setTestResult({ success: result.success, message: result.message });
       if (result.success) {
-        // Refresh da lista de usinas
         setTimeout(() => setMonitorModal(false), 2000);
       }
     } catch {

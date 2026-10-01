@@ -64,12 +64,7 @@ import {
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useApp } from '../context/AppContext';
-
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
-    ? 'http://localhost:3001/api'
-    : '/api');
+import { apiFetch } from '../lib/api';
 
 interface DeviceReading {
   usinaId: string;
@@ -93,11 +88,7 @@ interface NocEvent {
   severity: 'CRITICAL' | 'WARNING' | 'INFO' | 'OK';
 }
 
-const getHeaders = () => ({
-  'Content-Type': 'application/json',
-  'x-user-role': localStorage.getItem('user_role') || 'SUPER_ADMIN',
-  'x-user-email': localStorage.getItem('user_email') || 'admin@setec.com',
-});
+
 
 const createCustomMarker = (status: string) => {
   const configs: Record<string, { color: string; pulse: string; border: string }> = {
@@ -159,9 +150,8 @@ export default function Noc() {
   const fetchReadings = useCallback(async () => {
     try {
       setIsFetching(true);
-      const res = await fetch(`${API_URL}/solarman/readings`, { headers: getHeaders() });
-      if (res.ok) {
-        const data: DeviceReading[] = await res.json();
+      const data = await apiFetch<DeviceReading[]>('/solarman/readings');
+      if (data && Array.isArray(data)) {
         setReadings(data);
         setLastFetch(new Date().toLocaleTimeString('pt-BR'));
 
@@ -190,9 +180,8 @@ export default function Noc() {
         setEvents(newEvents);
       }
 
-      const statusRes = await fetch(`${API_URL}/solarman/status`, { headers: getHeaders() });
-      if (statusRes.ok) {
-        const st = await statusRes.json();
+      const st = await apiFetch<{ configured: boolean }>('/solarman/status');
+      if (st) {
         setSolarmanConfigured(st.configured);
       }
     } catch (err) {
@@ -206,12 +195,11 @@ export default function Noc() {
   const fetchAnalytics = useCallback(async () => {
     setLoadingAnalytics(true);
     try {
-      let url = `${API_URL}/solarman/analytics?usinaId=${selectedUsinaId}`;
-      if (startDate) url += `&startDate=${startDate}`;
-      if (endDate)   url += `&endDate=${endDate}`;
-      const res = await fetch(url, { headers: getHeaders() });
-      if (res.ok) {
-        const data = await res.json();
+      let path = `/solarman/analytics?usinaId=${selectedUsinaId}`;
+      if (startDate) path += `&startDate=${startDate}`;
+      if (endDate)   path += `&endDate=${endDate}`;
+      const data = await apiFetch<any>(path);
+      if (data) {
         setAnalyticsData(data);
       }
     } catch (err) {
@@ -238,7 +226,7 @@ export default function Noc() {
   const handleSyncAllCloud = async () => {
     setSyncLoading(true);
     try {
-      await fetch(`${API_URL}/solarman/sync-all`, { method: 'POST', headers: getHeaders() });
+      await apiFetch('/solarman/sync-all', { method: 'POST' });
       await fetchReadings();
       if (activeTab === 1) await fetchAnalytics();
     } catch (err) {
@@ -251,7 +239,7 @@ export default function Noc() {
   const handleForceRefresh = async () => {
     setIsFetching(true);
     try {
-      await fetch(`${API_URL}/solarman/refresh`, { method: 'POST', headers: getHeaders() });
+      await apiFetch('/solarman/refresh', { method: 'POST' });
       await fetchReadings();
       if (activeTab === 1) await fetchAnalytics();
     } catch (err) {
