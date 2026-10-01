@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { apiFetch } from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 export type UserRole = 'SUPER_ADMIN' | 'GESTOR' | 'OPERADOR' | 'TECNICO' | 'CLIENTE';
 
@@ -21,22 +21,51 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const mapSupabaseUser = async (sbUser: any): Promise<UserSession> => {
+  let role: UserRole = (sbUser.user_metadata?.role as UserRole) || 'SUPER_ADMIN';
+  let name = sbUser.user_metadata?.name || sbUser.email?.split('@')[0] || 'Usuário';
+
+  // Tenta consultar a tabela User no Supabase para buscar perfil/role e nome se configurados
+  try {
+    const { data } = await supabase
+      .from('User')
+      .select('name, role')
+      .eq('email', sbUser.email)
+      .maybeSingle();
+
+    if (data) {
+      if (data.role) role = data.role as UserRole;
+      if (data.name) name = data.name;
+    }
+  } catch {
+    // ignora se tabela não responder
+  }
+
+  return {
+    id: sbUser.id,
+    name,
+    email: sbUser.email || '',
+    role,
+  };
+};
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserSession | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Carrega sessão atual a partir do backend
+  // Carrega sessão ativa do Supabase
   const checkSession = async () => {
     try {
       setLoading(true);
-      const session = await apiFetch<UserSession>('/auth/me');
-      if (session && session.email) {
-        setUser(session);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const sessionUser = await mapSupabaseUser(session.user);
+        setUser(sessionUser);
       } else {
         setUser(null);
       }
-    } catch {
-      // Se a API ainda não possui a rota /auth/me, mantemos verificação segura sem crash
+    } catch (err) {
+      console.warn('Erro ao verificar sessão do Supabase:', err);
       setUser(null);
     } finally {
       setLoading(false);
@@ -45,26 +74,55 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     checkSession();
+
+    // Escuta mudanças de auth (login, logout, token refresh)
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const sessionUser = await mapSupabaseUser(session.user);
+        setUser(sessionUser);
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<UserSession> => {
-    const data = await apiFetch<UserSession>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
+    const cleanEmail = email.trim();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password,
     });
 
-    if (data && data.email) {
-      setUser(data);
-      return data;
+    if (error) {
+      console.error('Supabase auth error:', error);
+      if (error.message.includes('Invalid login credentials')) {
+        throw new Error('E-mail ou senha incorretos.');
+      }
+      if (error.message.includes('Email not confirmed')) {
+        throw new Error('E-mail ainda não confirmado no Supabase. No painel do Supabase (Auth > Users), clique nos 3 pontinhos do usuário e em "Confirm User", ou desative a confirmação de e-mail em Auth > Providers > Email.');
+      }
+      throw new Error(error.message || 'Falha ao autenticar no Supabase.');
     }
-    throw new Error('Falha ao autenticar usuário.');
+
+    if (data.user) {
+      const userSession = await mapSupabaseUser(data.user);
+      setUser(userSession);
+      return userSession;
+    }
+
+    throw new Error('Usuário não localizado após autenticação.');
   };
 
   const logout = async () => {
     try {
-      await apiFetch('/auth/logout', { method: 'POST' });
-    } catch {
-      // ignora se endpoint falhar
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Erro no logout do Supabase:', err);
     } finally {
       setUser(null);
     }

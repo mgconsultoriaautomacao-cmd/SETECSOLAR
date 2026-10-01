@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { apiFetch } from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 export interface Client {
   id: string;
@@ -90,8 +91,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiFetch<DataloggerSupplier[]>('/datalogger-suppliers');
       setSuppliers(data || []);
-    } catch (err) {
-      console.error('Failed to fetch suppliers:', err);
+    } catch {
+      try {
+        const { data } = await supabase.from('DataloggerSupplier').select('*');
+        if (data) setSuppliers(data);
+      } catch (err) {
+        console.warn('Fallback Supabase suppliers error:', err);
+      }
     }
   };
 
@@ -104,8 +110,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         gpsLongitude: c.gpsLongitude !== null && c.gpsLongitude !== undefined ? Number(c.gpsLongitude) : -46.6333,
       }));
       setClients(formatted);
-    } catch (err) {
-      console.error('Failed to fetch clients:', err);
+    } catch {
+      try {
+        const { data } = await supabase.from('Client').select('*');
+        if (data) {
+          const formatted = data.map((c: any) => ({
+            ...c,
+            gpsLatitude: c.gpsLatitude !== null && c.gpsLatitude !== undefined ? Number(c.gpsLatitude) : -23.5505,
+            gpsLongitude: c.gpsLongitude !== null && c.gpsLongitude !== undefined ? Number(c.gpsLongitude) : -46.6333,
+          }));
+          setClients(formatted);
+        }
+      } catch (err) {
+        console.warn('Fallback Supabase clients error:', err);
+      }
     }
   };
 
@@ -121,8 +139,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         gpsLongitude: u.gpsLongitude !== null && u.gpsLongitude !== undefined ? Number(u.gpsLongitude) : -46.6333,
       }));
       setUsinas(formatted);
-    } catch (err) {
-      console.error('Failed to fetch usinas:', err);
+    } catch {
+      try {
+        const { data } = await supabase.from('Usina').select('*, client:Client(name)');
+        if (data) {
+          const formatted = data.map((u: any) => ({
+            ...u,
+            client: u.client?.name || 'Cliente Desconhecido',
+            utility: u.utilityCompany || '',
+            payback: u.paybackYears || 0,
+            gpsLatitude: u.gpsLatitude !== null && u.gpsLatitude !== undefined ? Number(u.gpsLatitude) : -23.5505,
+            gpsLongitude: u.gpsLongitude !== null && u.gpsLongitude !== undefined ? Number(u.gpsLongitude) : -46.6333,
+          }));
+          setUsinas(formatted);
+        }
+      } catch (err) {
+        console.warn('Fallback Supabase usinas error:', err);
+      }
     }
   };
 
