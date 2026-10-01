@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import logoSetec from '../assets/logosetec.jpg';
+import Logo from './Logo';
 import './Layout.css';
 import {
   Avatar,
@@ -94,7 +94,7 @@ export default function Layout({ children }: LayoutProps) {
           <div>
             <div className="sidebar-logo-container">
               <div className="sidebar-logo-card" onClick={() => navigate('/dashboard')} role="button" tabIndex={0}>
-                <img src={logoSetec} alt="SETEC SOLAR" className="sidebar-logo" />
+                <Logo height={34} />
               </div>
             </div>
             <ul className="sidebar-menu">
@@ -150,7 +150,7 @@ export default function Layout({ children }: LayoutProps) {
           <div>
             <div className="sidebar-logo-container" style={{ justifyContent: 'space-between', gap: '8px' }}>
               <div className="sidebar-logo-card" onClick={() => { navigate('/dashboard'); setMobileOpen(false); }} role="button" tabIndex={0} style={{ flex: 1 }}>
-                <img src={logoSetec} alt="SETEC SOLAR" className="sidebar-logo" />
+                <Logo height={34} />
               </div>
               <button
                 onClick={() => setMobileOpen(false)}

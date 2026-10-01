@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import logoSetec from '../assets/logosetec.jpg';
+import Logo from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
 import { CircularProgress } from '@mui/material';
 import Visibility from '@mui/icons-material/Visibility';
@@ -51,7 +51,7 @@ export default function Login() {
       <div style={styles.card}>
         {/* Cabeçalho */}
         <div style={styles.header}>
-          <img src={logoSetec} alt="SETEC Solar" style={styles.logo} />
+          <Logo height={52} />
           <p style={styles.subtitle}>
             Acesse o painel de monitoramento fotovoltaico da SETEC Solar.
           </p>
