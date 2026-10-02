@@ -11,15 +11,19 @@ interface LogoProps {
 }
 
 export const Logo: React.FC<LogoProps> = ({ src, height = 36, collapsed = false }) => {
-  if (src) {
+  // Use a logo da SETEC da pasta public ou assets
+  const imageSrc = src || '/logo.png';
+  
+  if (imageSrc) {
     return (
       <img
-        src={src}
+        src={imageSrc}
         alt="SETEC Solar"
         style={{
           height: typeof height === 'number' ? `${height}px` : height,
           width: 'auto',
           objectFit: 'contain',
+          borderRadius: '4px'
         }}
       />
     );

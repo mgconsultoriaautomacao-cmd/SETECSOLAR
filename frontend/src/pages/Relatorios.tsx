@@ -69,43 +69,111 @@ export default function Relatorios() {
     const clientName = usina.client || clients.find(c => c.id === usina.clientId)?.name || 'Cliente SETEC';
     const nowStr = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR');
 
-    const content = `=====================================================
-          RELATÓRIO DE DESEMPENHO E GERAÇÃO ENERGÉTICA
-                  SETEC ENERGIA FOTOVOLTAICA
-=====================================================
-Data da Emissão: ${nowStr}
-Usina: ${usina.name}
-Código Datalogger / SN: ${usina.datalogger || 'N/A'}
-Cliente Responsável: ${clientName}
-Fabricante / Inversor: ${usina.manufacturer || 'Photovoltaic Inverter'} (${usina.model || 'Standard'})
+    if (format === 'PDF') {
+      const printWin = window.open('', '_blank');
+      if (!printWin) return;
 
---- PARÂMETROS TÉCNICOS ---
-Potência Instalada: ${usina.capacityKwp || 0} kWp
-Capacidade Inversor: ${usina.inverterCapacity || 0} kW
-Módulos Solares: ${usina.moduleCount || 0} painéis
-Cidade / UF: ${usina.city || 'RN'} / ${usina.state || 'RN'}
-Status Operacional: ${usina.status || 'N/A'}
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Relatório - ${usina.name} - SETEC ENERGIA</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; color: #1e293b; background: #fff; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #f57c00; padding-bottom: 15px; margin-bottom: 25px; }
+    .logo { font-size: 24px; font-weight: 800; color: #f57c00; letter-spacing: -0.5px; }
+    .sublogo { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-weight: 700; font-size: 12px; }
+    .online { background: #dcfce7; color: #166534; }
+    .offline { background: #fee2e2; color: #991b1b; }
+    .alert { background: #fef3c7; color: #92400e; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center; }
+    .card-title { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; }
+    .card-value { font-size: 22px; font-weight: 800; color: #0f172a; margin-top: 5px; }
+    .section-title { font-size: 16px; font-weight: 700; color: #0f172a; border-left: 4px solid #f57c00; padding-left: 10px; margin: 25px 0 15px 0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+    th { background: #f1f5f9; text-align: left; padding: 10px; font-size: 12px; color: #475569; border-bottom: 2px solid #cbd5e1; }
+    td { padding: 10px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+    .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
+    @media print {
+      body { margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">SETEC ENERGIA</div>
+      <div class="sublogo">Sistema de Gestão & Monitoramento Fotovoltaico</div>
+    </div>
+    <div style="text-align: right;">
+      <span class="badge ${usina.status === 'ONLINE' ? 'online' : usina.status === 'OFFLINE' ? 'offline' : 'alert'}">${usina.status || 'ONLINE'}</span>
+      <div style="font-size: 11px; color: #64748b; margin-top: 5px;">Emissão: ${nowStr}</div>
+    </div>
+  </div>
 
---- DADOS DE GERAÇÃO ENERGÉTICA ---
-Geração de Hoje (E-Hoje): ${usina.generationToday !== null && usina.generationToday !== undefined ? usina.generationToday + ' kWh' : '0.0 kWh'}
-Geração Acumulada (E-Total): ${usina.generationTotal !== null && usina.generationTotal !== undefined ? usina.generationTotal.toLocaleString('pt-BR') + ' kWh' : '0.0 kWh'}
-Potência Atual (P-Now): ${usina.powerNow !== null && usina.powerNow !== undefined ? usina.powerNow + ' kW' : '0.0 kW'}
+  <h2 style="margin: 0 0 5px 0; color: #0f172a;">${usina.name}</h2>
+  <p style="margin: 0 0 20px 0; color: #64748b; font-size: 14px;">Cliente: <strong>${clientName}</strong> | Datalogger S/N: <code>${usina.datalogger || 'N/A'}</code></p>
 
---- IMPACTO SOCIOAMBIENTAL E ECONOMIA ---
-Economia Financeira Estimada Mês: R$ ${((usina.generationToday || 5) * 0.92 * 30).toFixed(2)}
-Redução de Emissão de CO2: ${((usina.generationTotal || 100) * 0.42).toFixed(1)} kg CO2
-Árvores Salvas Equivalentes: ${Math.max(1, Math.round((usina.generationTotal || 100) * 0.05))} árvores
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Potência Instalada</div>
+      <div class="card-value" style="color: #3b82f6;">${usina.capacityKwp || 0} kWp</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Geração Hoje</div>
+      <div class="card-value" style="color: #f59e0b;">${usina.generationToday !== null && usina.generationToday !== undefined ? usina.generationToday : 0} kWh</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Geração Acumulada</div>
+      <div class="card-value" style="color: #10b981;">${usina.generationTotal !== null && usina.generationTotal !== undefined ? usina.generationTotal.toLocaleString('pt-BR') : 0} kWh</div>
+    </div>
+  </div>
 
------------------------------------------------------
-SETEC ENERGIA — Monitoramento & Gestão Fotovoltaica
-=====================================================
-`;
+  <div class="section-title">Especificações Técnicas</div>
+  <table>
+    <tr><th>Fabricante / Marca</th><td>${usina.manufacturer || usina.dataloggerSupplier?.name || 'Inversor Fotovoltaico'}</td></tr>
+    <tr><th>Modelo do Inversor</th><td>${usina.model || 'Standard'}</td></tr>
+    <tr><th>Capacidade do Inversor</th><td>${usina.inverterCapacity || usina.capacityKwp || 0} kW</td></tr>
+    <tr><th>Módulos Solares</th><td>${usina.moduleCount || 0} painéis</td></tr>
+    <tr><th>Distribuidora de Energia</th><td>${usina.utilityCompany || 'Neoenergia Cosern'}</td></tr>
+    <tr><th>Localização</th><td>${usina.city || 'Tibau'} - ${usina.state || 'RN'}</td></tr>
+  </table>
 
-    const blob = new Blob([content], { type: format === 'CSV' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;' });
+  <div class="section-title">Impacto Ambiental & Economia Estimada</div>
+  <table>
+    <tr><th>Economia Estimada Mês</th><td><strong>R$ ${((usina.generationToday || 5) * 0.92 * 30).toFixed(2)}</strong></td></tr>
+    <tr><th>Redução de CO₂ Evitada</th><td>${((usina.generationTotal || 100) * 0.42).toFixed(1)} kg CO₂</td></tr>
+    <tr><th>Equivalência em Árvores</th><td>${Math.max(1, Math.round((usina.generationTotal || 100) * 0.05))} árvores plantadas</td></tr>
+  </table>
+
+  <div class="footer">
+    SETEC ENERGIA — Relatório gerado automaticamente via Plataforma de Monitoramento. Todos os direitos reservados.
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 400);
+    };
+  </script>
+</body>
+</html>`;
+
+      printWin.document.write(html);
+      printWin.document.close();
+      return;
+    }
+
+    // CSV Format (UTF-8 BOM for Excel)
+    let csv = '\uFEFFUsina;Cliente;Datalogger_SN;Fabricante;Potencia_kWp;Geracao_Hoje_kWh;Geracao_Total_kWh;Status\n';
+    csv += `"${usina.name}";"${clientName}";"${usina.datalogger || ''}";"${usina.manufacturer || ''}";${usina.capacityKwp || 0};${usina.generationToday || 0};${usina.generationTotal || 0};"${usina.status || ''}"\n`;
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Relatorio_${usina.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.${format.toLowerCase()}`;
+    link.download = `Relatorio_${usina.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -114,35 +182,129 @@ SETEC ENERGIA — Monitoramento & Gestão Fotovoltaica
 
   // Export all usinas report summary
   const downloadConsolidatedReport = (format: 'PDF' | 'CSV') => {
-    let content = `=====================================================
-         RELATÓRIO CONSOLIDADO DE USINAS - SETEC ENERGIA
-=====================================================
-Data de Geracão: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}
-Total de Usinas Cadastradas: ${totalUsinas}
-Usinas Operacionais (Online): ${usinasOnline}
-Potência Total Instalada: ${totalCapacityKwp.toFixed(2)} kWp
-Geração Total Acumulada: ${totalGenerationTotal.toLocaleString('pt-BR')} kWh
+    const nowStr = new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR');
 
-=====================================================
-LISTAGEM DETALHADA DAS USINAS
-=====================================================
-Usina | Cliente | Fornecedor / Fabricante | Potência (kWp) | Status | E-Hoje (kWh) | E-Total (kWh)
----------------------------------------------------------------------------------------------------
-`;
+    if (format === 'PDF') {
+      const printWin = window.open('', '_blank');
+      if (!printWin) return;
 
+      const rows = usinas.map((u, i) => {
+        const clientName = u.client || clients.find(c => c.id === u.clientId)?.name || 'N/A';
+        const mfr = u.manufacturer || u.dataloggerSupplier?.name || 'N/A';
+        return `<tr>
+          <td>${i + 1}</td>
+          <td><strong>${u.name}</strong></td>
+          <td>${clientName}</td>
+          <td>${mfr}</td>
+          <td>${u.capacityKwp || 0} kWp</td>
+          <td style="color:#10b981;font-weight:700;">${u.generationToday || 0} kWh</td>
+          <td>${(u.generationTotal || 0).toLocaleString('pt-BR')} kWh</td>
+          <td><span style="font-weight:700;color:${u.status === 'ONLINE' ? '#166534' : u.status === 'OFFLINE' ? '#991b1b' : '#92400e'}">${u.status}</span></td>
+        </tr>`;
+      }).join('');
+
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Relatório Consolidado - SETEC ENERGIA</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; color: #1e293b; background: #fff; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #f57c00; padding-bottom: 15px; margin-bottom: 25px; }
+    .logo { font-size: 24px; font-weight: 800; color: #f57c00; }
+    .sublogo { font-size: 12px; color: #64748b; font-weight: 600; text-transform: uppercase; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 25px; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; text-align: center; }
+    .card-title { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; }
+    .card-value { font-size: 20px; font-weight: 800; color: #0f172a; margin-top: 5px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th { background: #f1f5f9; text-align: left; padding: 10px; font-size: 11px; color: #475569; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; }
+    td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+    .footer { margin-top: 40px; padding-top: 15px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 11px; color: #94a3b8; }
+    @media print { body { margin: 0; } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <div class="logo">SETEC ENERGIA</div>
+      <div class="sublogo">Relatório Geral de Desempenho de Usinas</div>
+    </div>
+    <div style="text-align: right; font-size: 12px; color: #64748b;">
+      Emissão: <strong>${nowStr}</strong>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="card-title">Total de Usinas</div>
+      <div class="card-value">${totalUsinas}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Operacionais (Online)</div>
+      <div class="card-value" style="color: #10b981;">${usinasOnline}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Potência Instalada</div>
+      <div class="card-value" style="color: #3b82f6;">${totalCapacityKwp.toFixed(1)} kWp</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Geração Hoje / Acumulada</div>
+      <div class="card-value" style="color: #f59e0b; font-size: 16px;">
+        ${totalGenerationToday.toFixed(1)} kWh <br/><small style="color: #10b981; font-size: 13px;">Total: ${totalGenerationTotal.toLocaleString('pt-BR')} kWh</small>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="color: #0f172a; margin-bottom: 10px;">Listagem Detalhada das Usinas</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Usina</th>
+        <th>Cliente</th>
+        <th>Inversor / Marca</th>
+        <th>Potência</th>
+        <th>Geração Hoje</th>
+        <th>Geração Total</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+
+  <div class="footer">
+    SETEC ENERGIA — Monitoramento & Gestão Fotovoltaica. Documento emitido para fins de controle interno e prestação de contas.
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 400);
+    };
+  </script>
+</body>
+</html>`;
+
+      printWin.document.write(html);
+      printWin.document.close();
+      return;
+    }
+
+    // CSV format for Excel
+    let csv = '\uFEFF#;Usina;Cliente;Inversor;Potencia_kWp;Geracao_Hoje_kWh;Geracao_Total_kWh;Status\n';
     usinas.forEach((u, i) => {
       const clientName = u.client || clients.find(c => c.id === u.clientId)?.name || 'N/A';
       const mfr = u.manufacturer || u.dataloggerSupplier?.name || 'N/A';
-      content += `${i + 1}. ${u.name} | ${clientName} | ${mfr} | ${u.capacityKwp || 0} kWp | ${u.status} | ${u.generationToday || 0} kWh | ${u.generationTotal || 0} kWh\n`;
+      csv += `${i + 1};"${u.name}";"${clientName}";"${mfr}";${u.capacityKwp || 0};${u.generationToday || 0};${u.generationTotal || 0};"${u.status || ''}"\n`;
     });
 
-    content += `\n=====================================================\nSETEC ENERGIA - Relatório Geral de Desempenho\n`;
-
-    const blob = new Blob([content], { type: format === 'CSV' ? 'text/csv;charset=utf-8;' : 'text/plain;charset=utf-8;' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Relatorio_Consolidado_SETEC_${new Date().toISOString().split('T')[0]}.${format.toLowerCase()}`;
+    link.download = `Relatorio_Consolidado_SETEC_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
