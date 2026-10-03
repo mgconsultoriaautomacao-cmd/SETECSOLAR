@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 const API_URL =
   import.meta.env.VITE_API_URL ||
   (typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -26,8 +28,19 @@ export async function apiFetch<T = any>(endpoint: string, options: ApiFetchOptio
     }
   }
 
+  const authHeaders: Record<string, string> = {};
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.access_token) {
+      authHeaders['Authorization'] = `Bearer ${session.access_token}`;
+    }
+  } catch (err) {
+    console.warn('Erro ao obter token de autenticação:', err);
+  }
+
   const defaultHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...authHeaders,
   };
 
   const response = await fetch(url, {

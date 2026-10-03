@@ -10,10 +10,12 @@ import { TicketModule } from './ticket/ticket.module';
 import { FinancialModule } from './financial/financial.module';
 import { GmailModule } from './gmail/gmail.module';
 import { DataloggerSupplierModule } from './datalogger-supplier/datalogger-supplier.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
     PrismaModule,
+    AuthModule,
     ClientModule,
     UsinaModule,
     SolarmanModule,

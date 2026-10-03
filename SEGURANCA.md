@@ -51,24 +51,27 @@
 
 ---
 
-## 2. O Que Depende do Backend (Requisitos do Servidor)
+## 2. O Que Foi Corrigido no Backend (Fase 2 — Concluída em 03/10/2026)
 
-Para que a segurança e o controle de acesso funcionem plenamente de ponta a ponta, o backend NestJS (na pasta `/backend`) deve implementar os seguintes itens:
+1. **Módulo de Autenticação (`src/auth/auth.module.ts`, `auth.service.ts`, `auth.controller.ts`):**
+   - Implementado endpoint `GET /api/auth/me`: retorna o perfil seguro e oficial do usuário autenticado (`id`, `name`, `email`, `role`).
+   - Implementado endpoint `POST /api/auth/change-password`: valida a senha atual e atualiza a senha de forma criptografada tanto no Supabase Auth quanto no Prisma.
+   - Implementado endpoint `POST /api/auth/login`: login server-side como fallback ou proxy.
+   - Implementado endpoint `POST /api/auth/logout`.
 
-1. **Endpoint de Autenticação (`POST /api/auth/login`):**
-   - Receber `email` e `password`.
-   - Comparar a senha informada com o hash salvo no banco (usando `bcrypt` ou `argon2`).
-   - Emitir um cookie de sessão seguro (`httpOnly`, `SameSite=Lax`, `Secure` em produção) ou um token JWT assinado.
-2. **Endpoint de Perfil Atual (`GET /api/auth/me`):**
-   - Validar o cookie/JWT da requisição e retornar os dados do usuário conectado: `{ id, name, email, role }`.
-3. **Endpoint de Logout (`POST /api/auth/logout`):**
-   - Invalidar a sessão e limpar o cookie `httpOnly`.
-4. **Endpoint de Alteração de Senha (`POST /api/auth/change-password`):**
-   - Validar a senha atual do usuário conectado e atualizar o hash da nova senha no banco.
-5. **Middleware de Autorização por Papel (Guards no NestJS):**
-   - Não confiar nos cabeçalhos `x-user-role` ou `x-user-email` enviados pelo cliente. Validar a autorização real diretamente na sessão/token no servidor para cada rota.
-6. **Rate Limiting no Login:**
-   - Implementar limitação de tentativas por IP no endpoint de login (ex: via `nestjs-throttler`) para prevenir ataques de força bruta.
+2. **Blindagem Definitiva do `RoleGuard` (`src/auth/role.guard.ts`):**
+   - **Removida a vulnerabilidade crítica de bypass:** Eliminado o fallback padrão para `SUPER_ADMIN` e a leitura ingênua do cabeçalho `x-user-role`.
+   - **Validação Criptográfica de Tokens:** Toda requisição a rotas protegidas exige cabeçalho `Authorization: Bearer <token>`, validado criptograficamente pelo Supabase (`supabase.auth.getUser(token)`).
+   - **Controle de Acesso Baseado em Papéis (RBAC):** Os perfis reais do usuário são consultados de forma segura no banco de dados (`User` e `Client`).
+   - **Isolamento de Clientes:** Clientes (`CLIENTE`) são bloqueados de rotas administrativas e financeiras (`/financial`, `/datalogger-supplier`, `/gmail`).
+   - **Proteção de Escrita:** Apenas `SUPER_ADMIN` e `GESTOR` (e técnicos autorizados) podem realizar alterações de dados (`POST`, `PUT`, `DELETE`, `PATCH`).
+
+3. **Injeção Automática de Bearer Token no Frontend (`src/lib/api.ts`):**
+   - O cliente de API (`apiFetch`) agora obtém automaticamente a sessão ativa do Supabase e anexa o token `Authorization: Bearer <access_token>` em todas as chamadas para o backend.
+
+4. **Correção de Políticas de Segurança (CSP) na Vercel (`vercel.json`):**
+   - Adicionadas as origens `https://*.supabase.co` e `wss://*.supabase.co` ao `connect-src` da política de Content Security Policy (CSP), garantindo que conexões de login, autenticação e WebSocket realtime funcionem em produção sem bloqueio pelo navegador.
+
 
 ---
 

@@ -86,10 +86,10 @@ export default function Configuracoes() {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-    } catch {
+    } catch (err: any) {
       setPasswordStatus({
-        type: 'info',
-        text: 'O serviço de alteração de senha ainda não está implementado na API do backend. Contate o administrador do sistema.',
+        type: 'error',
+        text: err?.message || 'Falha ao atualizar a senha. Verifique a senha atual e tente novamente.',
       });
     } finally {
       setIsChangingPassword(false);
