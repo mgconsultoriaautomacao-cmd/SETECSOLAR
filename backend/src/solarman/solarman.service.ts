@@ -6,6 +6,7 @@ import { GrowattService, GrowattDiscoveryResult, GrowattDevice } from './growatt
 import { SolplanetService } from './solplanet.service';
 import { SolisService, SolisDiscoveryResult } from './solis.service';
 import { GoodWeService } from './goodwe.service';
+import { SofarService } from './sofar.service';
 
 
 
@@ -332,6 +333,7 @@ export class SolarmanService implements OnModuleInit {
     private solplanetService: SolplanetService,
     private solisService: SolisService,
     private goodweService: GoodWeService,
+    private sofarService: SofarService,
   ) {}
 
 
@@ -881,8 +883,8 @@ export class SolarmanService implements OnModuleInit {
       }
 
       if (supplier.type === 'GOODWE_CLOUD' || supplier.type === 'GOODWE') {
-        const account = supplier.username || supplier.appId || 'setesolarseg@gmail.com';
-        const secret = supplier.appSecret || supplier.token || '120687@Eli';
+        const account = supplier.username || supplier.appId || 'setecsolarseg@gmail.com';
+        const secret = supplier.password || supplier.appSecret || supplier.token || 'Admin@123';
         const goodweData = await this.goodweService.readUsinaFromCloud(cleanDatalogger, account, secret);
         if (goodweData) {
           return {
@@ -905,6 +907,34 @@ export class SolarmanService implements OnModuleInit {
           gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
           status: 'OFFLINE', lastUpdate: new Date(),
           errorMessage: `Sem resposta da GoodWe SEMS API. Verifique as credenciais do fornecedor "${supplier.name}".`,
+        };
+      }
+
+      if (supplier.type === 'SOFAR_CLOUD' || supplier.type === 'SOFAR') {
+        const account = supplier.username || supplier.appId || '';
+        const secret = supplier.password || supplier.appSecret || supplier.token || '';
+        const sofarData = await this.sofarService.readUsinaFromCloud(cleanDatalogger, account, secret);
+        if (sofarData) {
+          return {
+            usinaId, usinaNome, deviceSn: cleanDatalogger,
+            ipAddress: 'Sofar Cloud',
+            powerNow: sofarData.powerNow,
+            generationToday: sofarData.generationToday,
+            generationTotal: sofarData.generationTotal,
+            gridVoltage: null, gridFrequency: null,
+            temperature: sofarData.temperature,
+            dcPower: null,
+            status: sofarData.status === 'ONLINE' ? 'ONLINE' : 'OFFLINE',
+            lastUpdate: new Date(),
+          };
+        }
+        return {
+          usinaId, usinaNome, deviceSn: cleanDatalogger,
+          ipAddress: 'Sofar Cloud',
+          powerNow: null, generationToday: null, generationTotal: null,
+          gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+          status: 'OFFLINE', lastUpdate: new Date(),
+          errorMessage: `Sem resposta da Sofar Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
         };
       }
     }
@@ -1198,6 +1228,60 @@ export class SolarmanService implements OnModuleInit {
       return {
         success: false,
         message: `Sem resposta da SolisCloud API para o SN "${sn}". Verifique se o número de série está correto.`,
+      };
+    }
+
+    // Se o IP for igual a "goodwe" ou "goodwecloud" ou "sems", testa via API GoodWe SEMS+
+    if (ip.toLowerCase() === 'goodwe' || ip.toLowerCase() === 'goodwecloud' || ip.toLowerCase() === 'sems') {
+      const account = supplier?.username || supplier?.appId || 'setecsolarseg@gmail.com';
+      const secret = supplier?.password || supplier?.appSecret || supplier?.token || 'Admin@123';
+      const goodweData = await this.goodweService.readUsinaFromCloud(sn, account, secret);
+      if (goodweData) {
+        return {
+          success: true,
+          message: `✅ Datalogger/Inversor conectado via GoodWe SEMS+ com sucesso!`,
+          discoveredIp: 'GoodWe SEMS+',
+          data: {
+            powerNow: goodweData.powerNow,
+            generationToday: goodweData.generationToday,
+            generationTotal: goodweData.generationTotal,
+            status: goodweData.status,
+          } as any,
+        };
+      }
+      return {
+        success: false,
+        message: `Sem resposta da GoodWe SEMS+ para o identificador "${sn}". Verifique se o ID da Estação ou SN do Inversor/Dongle está correto.`,
+      };
+    }
+
+    // Se o IP for igual a "sofar" ou "sofarcloud", testa via API Sofar Cloud
+    if (ip.toLowerCase() === 'sofar' || ip.toLowerCase() === 'sofarcloud') {
+      const account = supplier?.username || supplier?.appId || '';
+      const secret = supplier?.password || supplier?.appSecret || supplier?.token || '';
+      if (!account || !secret) {
+        return {
+          success: false,
+          message: 'Credenciais Sofar Cloud (Usuário/Senha) não configuradas no fornecedor.',
+        };
+      }
+      const sofarData = await this.sofarService.readUsinaFromCloud(sn, account, secret);
+      if (sofarData) {
+        return {
+          success: true,
+          message: `✅ Datalogger/Inversor conectado via Sofar Cloud com sucesso!`,
+          discoveredIp: 'Sofar Cloud',
+          data: {
+            powerNow: sofarData.powerNow,
+            generationToday: sofarData.generationToday,
+            generationTotal: sofarData.generationTotal,
+            status: sofarData.status,
+          } as any,
+        };
+      }
+      return {
+        success: false,
+        message: `Sem resposta da Sofar Cloud para o identificador "${sn}". Verifique se o SN ou ID da Estação está correto.`,
       };
     }
 
@@ -2213,25 +2297,21 @@ export class SolarmanService implements OnModuleInit {
       supplier = await this.dbCreateSupplier({
         name: 'GoodWe SEMS Portal (Auto)',
         type: 'GOODWE_CLOUD',
-        username: 'setesolarseg@gmail.com',
-        appId: 'setesolarseg@gmail.com',
-        appSecret: '120687@Eli',
+        username: 'setecsolarseg@gmail.com',
+        appId: 'setecsolarseg@gmail.com',
+        password: 'Admin@123',
+        token: 'Admin@123',
+        appSecret: 'Admin@123',
       });
     }
 
-    const account = supplier.username || supplier.appId || 'setesolarseg@gmail.com';
-    const secret = supplier.appSecret || supplier.token || '120687@Eli';
-
-    const loginObj = await this.goodweService.login(account, secret);
-    if (!loginObj) {
-      result.errors.push('Falha ao autenticar no GoodWe SEMS Portal (Email/Senha incorretos - código 100005). Verifique o cadastro no portal SEMS+.');
-      return result;
-    }
+    const account = supplier.username || supplier.appId || 'setecsolarseg@gmail.com';
+    const secret = supplier.password || supplier.appSecret || supplier.token || 'Admin@123';
 
     try {
-      const plantList = await this.goodweService.listPlants(loginObj.uid, loginObj.token, loginObj.clusterUrl);
-      if (!plantList || plantList.length === 0) {
-        result.errors.push('Nenhuma usina/estação encontrada na conta GoodWe SEMS Portal.');
+      const stations = await this.goodweService.listStationsWithDevices(account, secret);
+      if (!stations || stations.length === 0) {
+        result.errors.push('Nenhuma usina encontrada ou falha de autenticação no GoodWe SEMS+.');
         return result;
       }
 
@@ -2247,8 +2327,8 @@ export class SolarmanService implements OnModuleInit {
             phone: '00000000000',
             whatsapp: '00000000000',
             zipCode: '00000000',
-            address: 'Importado via GoodWe SEMS Portal',
-            city: 'Importado',
+            address: 'Importado via GoodWe SEMS+',
+            city: 'Mossoró',
             state: 'RN',
             installationDate: new Date(),
           });
@@ -2256,15 +2336,17 @@ export class SolarmanService implements OnModuleInit {
         return found?.id;
       };
 
-      for (const st of plantList) {
-        const stationName = st.pw_name || st.powerstation_name || st.name || `GoodWe Plant ${st.pw_id || st.id}`;
-        const stationIdStr = String(st.pw_id || st.id || st.powerstation_id || '');
-        const deviceSn = st.sn || st.inverter_sn || stationIdStr;
+      for (const st of stations) {
+        const stationName = st.name || `GoodWe Plant ${st.id}`;
+        const stationIdStr = st.id;
+        const deviceSn = st.inverterSns[0] || st.dongleSns[0] || stationIdStr;
 
         const existing = existingUsinas.find(u =>
           u.datalogger === deviceSn ||
           u.datalogger === stationIdStr ||
-          u.name === stationName
+          st.inverterSns.includes(u.datalogger) ||
+          st.dongleSns.includes(u.datalogger) ||
+          u.name.toLowerCase() === stationName.toLowerCase()
         );
 
         if (existing) {
@@ -2274,10 +2356,17 @@ export class SolarmanService implements OnModuleInit {
               clientId: clientTargetId,
               datalogger: deviceSn,
               dataloggerSupplierId: supplier?.id,
-              status: 'ONLINE',
+              powerNow: st.pSystem > 0 ? st.pSystem : existing.powerNow,
+              generationToday: st.productionToday > 0 ? st.productionToday : existing.generationToday,
+              capacityKwp: st.installedPower || st.pvInstallP || existing.capacityKwp,
+              address: st.googleAddress || existing.address,
+              gpsLatitude: st.latitude ?? existing.gpsLatitude,
+              gpsLongitude: st.longitude ?? existing.gpsLongitude,
+              status: (st.pSystem > 0 || st.status === 1) ? 'ONLINE' : 'OFFLINE',
+              readingLastUpdate: new Date(),
             });
             result.updated++;
-            result.details.push({ name: stationName, deviceSn, action: 'Atualizada (GoodWe Cloud)' });
+            result.details.push({ name: stationName, deviceSn, action: 'Atualizada (GoodWe SEMS+)' });
           } catch (e) {
             result.skipped++;
             result.details.push({ name: stationName, deviceSn, action: 'Já existe' });
@@ -2287,32 +2376,35 @@ export class SolarmanService implements OnModuleInit {
 
         try {
           const clientTargetId = await getOrCreateClient(stationName);
-          const cap = Number(st.capacity || st.capacity_kw || 10.0);
+          const cap = Number(st.installedPower || st.pvInstallP || 5.0);
 
           const createdUsina = await this.dbCreateUsina({
             name: stationName,
             clientId: clientTargetId,
             capacityKwp: cap,
-            inverterCapacity: cap * 0.8,
+            inverterCapacity: cap,
             moduleCount: Math.round(cap * 2),
             manufacturer: 'GoodWe',
-            model: st.model || 'GoodWe Inverter',
-            utilityCompany: '',
+            model: 'GoodWe Inverter',
+            utilityCompany: 'Neoenergia Cosern',
             estimatedKwh: cap * 130,
             paybackYears: 4.0,
             installationDate: new Date(),
-            status: 'ONLINE',
+            status: (st.pSystem > 0 || st.status === 1) ? 'ONLINE' : 'OFFLINE',
             datalogger: deviceSn,
-            city: st.city || 'Importado',
+            city: 'Mossoró',
             state: 'RN',
-            address: st.address || 'Importado GoodWe',
+            address: st.googleAddress || 'Mossoró - RN',
             dataloggerSupplierId: supplier?.id,
-            gpsLatitude: st.latitude ? Number(st.latitude) : null,
-            gpsLongitude: st.longitude ? Number(st.longitude) : null,
+            powerNow: st.pSystem > 0 ? st.pSystem : null,
+            generationToday: st.productionToday > 0 ? st.productionToday : null,
+            readingLastUpdate: new Date(),
+            gpsLatitude: st.latitude,
+            gpsLongitude: st.longitude,
           });
           if (createdUsina) {
             result.created++;
-            result.details.push({ name: stationName, deviceSn, action: 'Criada' });
+            result.details.push({ name: stationName, deviceSn, action: 'Criada (GoodWe SEMS+)' });
           } else {
             result.errors.push(`Erro ao salvar usina GoodWe "${stationName}" no banco de dados.`);
           }
@@ -2321,7 +2413,161 @@ export class SolarmanService implements OnModuleInit {
         }
       }
     } catch (err: any) {
-      result.errors.push(`Erro ao consultar GoodWe SEMS API: ${err.message}`);
+      result.errors.push(`Erro ao consultar GoodWe SEMS+ API: ${err.message}`);
+    }
+
+    if (result.created > 0 || result.updated > 0) {
+      await this.pollAll();
+    }
+
+    return result;
+  }
+
+  // ─── Sofar Cloud: Sincronização de plantas → Usinas no banco ───────────
+  async syncSofarPlants(clientId?: string, supplierId?: string): Promise<{
+    created: number;
+    skipped: number;
+    updated: number;
+    errors: string[];
+    details: { name: string; deviceSn: string; action: string }[];
+  }> {
+    const result = {
+      created: 0,
+      skipped: 0,
+      updated: 0,
+      errors: [] as string[],
+      details: [] as { name: string; deviceSn: string; action: string }[],
+    };
+
+    let supplier: any = null;
+    if (supplierId) {
+      supplier = await this.dbGetSupplier(supplierId);
+    }
+    if (!supplier) {
+      supplier = await this.dbGetSupplier(undefined, 'SOFAR_CLOUD');
+    }
+    if (!supplier) {
+      supplier = await this.dbGetSupplier(undefined, 'SOFAR');
+    }
+    if (!supplier) {
+      result.errors.push('Nenhum fornecedor Sofar Cloud configurado. Cadastre as credenciais do Sofar no painel.');
+      return result;
+    }
+
+    const account = supplier.username || supplier.appId || '';
+    const secret = supplier.password || supplier.appSecret || supplier.token || '';
+
+    if (!account || !secret) {
+      result.errors.push('Usuário ou senha não informados para o fornecedor Sofar.');
+      return result;
+    }
+
+    try {
+      const stations = await this.sofarService.listStations(account, secret);
+      if (!stations || stations.length === 0) {
+        result.errors.push('Nenhuma usina encontrada na conta Sofar Cloud ou erro de autenticação.');
+        return result;
+      }
+
+      const existingUsinas = await this.dbGetUsinas();
+
+      const getOrCreateClient = async (clientName: string) => {
+        let found = await this.dbGetClient(clientId, clientName);
+        if (!found) {
+          found = await this.dbCreateClient({
+            name: clientName,
+            email: `sofar_${Date.now()}@local`,
+            document: '00000000000',
+            phone: '00000000000',
+            whatsapp: '00000000000',
+            zipCode: '00000000',
+            address: 'Importado via Sofar Cloud',
+            city: 'Importado',
+            state: 'RN',
+            installationDate: new Date(),
+          });
+        }
+        return found?.id;
+      };
+
+      for (const st of stations) {
+        const stationName = st.name || `Sofar Plant ${st.id}`;
+        const deviceSn = st.inverterSns[0] || st.id;
+
+        const existing = existingUsinas.find(u =>
+          u.datalogger === deviceSn ||
+          u.datalogger === st.id ||
+          st.inverterSns.includes(u.datalogger) ||
+          u.name.toLowerCase() === stationName.toLowerCase()
+        );
+
+        if (existing) {
+          try {
+            const clientTargetId = await getOrCreateClient(stationName);
+            await this.dbUpdateUsina(existing.id, {
+              clientId: clientTargetId,
+              datalogger: deviceSn,
+              dataloggerSupplierId: supplier?.id,
+              powerNow: st.powerKw > 0 ? st.powerKw : existing.powerNow,
+              generationToday: st.energyTodayKwh > 0 ? st.energyTodayKwh : existing.generationToday,
+              generationTotal: st.energyTotalKwh > 0 ? st.energyTotalKwh : existing.generationTotal,
+              capacityKwp: st.capacityKwp || existing.capacityKwp,
+              address: st.address || existing.address,
+              gpsLatitude: st.latitude ?? existing.gpsLatitude,
+              gpsLongitude: st.longitude ?? existing.gpsLongitude,
+              status: (st.powerKw > 0 || st.status === 1 || st.status === 'ONLINE') ? 'ONLINE' : 'OFFLINE',
+              readingLastUpdate: new Date(),
+            });
+            result.updated++;
+            result.details.push({ name: stationName, deviceSn, action: 'Atualizada (Sofar Cloud)' });
+          } catch (e) {
+            result.skipped++;
+            result.details.push({ name: stationName, deviceSn, action: 'Já existe' });
+          }
+          continue;
+        }
+
+        try {
+          const clientTargetId = await getOrCreateClient(stationName);
+          const cap = Number(st.capacityKwp || 5.0);
+
+          const createdUsina = await this.dbCreateUsina({
+            name: stationName,
+            clientId: clientTargetId,
+            capacityKwp: cap,
+            inverterCapacity: cap,
+            moduleCount: Math.round(cap * 2),
+            manufacturer: 'Sofar Solar',
+            model: 'Sofar Inverter',
+            utilityCompany: '',
+            estimatedKwh: cap * 130,
+            paybackYears: 4.0,
+            installationDate: new Date(),
+            status: (st.powerKw > 0 || st.status === 1 || st.status === 'ONLINE') ? 'ONLINE' : 'OFFLINE',
+            datalogger: deviceSn,
+            city: 'Importado',
+            state: 'RN',
+            address: st.address || 'Importado Sofar Cloud',
+            dataloggerSupplierId: supplier?.id,
+            powerNow: st.powerKw > 0 ? st.powerKw : null,
+            generationToday: st.energyTodayKwh > 0 ? st.energyTodayKwh : null,
+            generationTotal: st.energyTotalKwh > 0 ? st.energyTotalKwh : null,
+            readingLastUpdate: new Date(),
+            gpsLatitude: st.latitude,
+            gpsLongitude: st.longitude,
+          });
+          if (createdUsina) {
+            result.created++;
+            result.details.push({ name: stationName, deviceSn, action: 'Criada (Sofar Cloud)' });
+          } else {
+            result.errors.push(`Erro ao salvar usina Sofar "${stationName}" no banco de dados.`);
+          }
+        } catch (err: any) {
+          result.errors.push(`Erro ao criar usina Sofar "${stationName}": ${err.message}`);
+        }
+      }
+    } catch (err: any) {
+      result.errors.push(`Erro ao consultar Sofar Cloud API: ${err.message}`);
     }
 
     if (result.created > 0 || result.updated > 0) {
@@ -2339,7 +2585,7 @@ export class SolarmanService implements OnModuleInit {
     errors: string[];
     details: { name: string; deviceSn: string; action: string }[];
   }> {
-    this.logger.log('🌐 Iniciando Sincronização Unificada PARALELA de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe)...');
+    this.logger.log('🌐 Iniciando Sincronização Unificada PARALELA de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe, Sofar)...');
 
     const emptyRes = { created: 0, skipped: 0, updated: 0, errors: [] as string[], details: [] as any[] };
 
@@ -2349,6 +2595,7 @@ export class SolarmanService implements OnModuleInit {
       this.syncSolplanetPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
       this.syncSolarmanPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
       this.syncGoodWePlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
+      this.syncSofarPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
     ]);
 
     let totalCreated = 0;
@@ -2666,6 +2913,51 @@ export class SolarmanService implements OnModuleInit {
             } else {
               item.status = 'AUTH_FAILED';
               item.message = 'Falha ao autenticar na API Solarman. Verifique as credenciais.';
+            }
+          }
+        }
+
+        // ─── GoodWe Cloud (SEMS+) ───────────────────────────────────────
+        else if (supplier.type === 'GOODWE_CLOUD' || supplier.type === 'GOODWE') {
+          const account = supplier.username || supplier.appId || 'setecsolarseg@gmail.com';
+          const secret = supplier.password || supplier.appSecret || supplier.token || 'Admin@123';
+          const stations = await this.goodweService.listStationsWithDevices(account, secret);
+          if (stations && stations.length > 0) {
+            item.status = 'OK';
+            item.message = `Conectado GoodWe SEMS+ com sucesso. ${stations.length} usina(s) ativa(s).`;
+          } else {
+            const loginObj = await this.goodweService.login(account, secret);
+            if (loginObj) {
+              item.status = 'OK';
+              item.message = 'Autenticação GoodWe SEMS+ OK (sem usinas vinculadas no momento).';
+            } else {
+              item.status = 'AUTH_FAILED';
+              item.message = 'Falha ao autenticar no GoodWe SEMS+. Verifique usuário e senha no fornecedor.';
+            }
+          }
+        }
+
+        // ─── Sofar Cloud ────────────────────────────────────────────────
+        else if (supplier.type === 'SOFAR_CLOUD' || supplier.type === 'SOFAR') {
+          const account = supplier.username || supplier.appId || '';
+          const secret = supplier.password || supplier.appSecret || supplier.token || '';
+          if (!account || !secret) {
+            item.status = 'NOT_CONFIGURED';
+            item.message = 'Credenciais Sofar Cloud (Usuário/Senha) não configuradas no fornecedor.';
+          } else {
+            const stations = await this.sofarService.listStations(account, secret);
+            if (stations && stations.length > 0) {
+              item.status = 'OK';
+              item.message = `Conectado Sofar Cloud com sucesso. ${stations.length} usina(s) ativa(s).`;
+            } else {
+              const loginObj = await this.sofarService.login(account, secret);
+              if (loginObj) {
+                item.status = 'OK';
+                item.message = 'Autenticação Sofar Cloud OK (sem usinas vinculadas no momento).';
+              } else {
+                item.status = 'AUTH_FAILED';
+                item.message = 'Falha ao autenticar no Sofar Cloud. Verifique usuário e senha.';
+              }
             }
           }
         }

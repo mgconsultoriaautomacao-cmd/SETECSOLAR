@@ -3,6 +3,7 @@ import { SolarmanService } from './solarman.service';
 import { GrowattService } from './growatt.service';
 import { SolplanetService } from './solplanet.service';
 import { GoodWeService } from './goodwe.service';
+import { SofarService } from './sofar.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RoleGuard } from '../auth/role.guard';
 
@@ -14,6 +15,7 @@ export class SolarmanController {
     private readonly growattService: GrowattService,
     private readonly solplanetService: SolplanetService,
     private readonly goodweService: GoodWeService,
+    private readonly sofarService: SofarService,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -217,9 +219,40 @@ export class SolarmanController {
     return this.solarmanService.syncGoodWePlants(body.clientId, body.supplierId);
   }
 
+  // ─── Sofar Cloud: Diagnóstico e Plantas ────────────────────────────────────
+
+  // GET /solarman/sofar/diagnose — Diagnóstico da API Sofar Cloud
+  @Get('sofar/diagnose')
+  async diagnoseSofar(
+    @Query('account') account?: string,
+    @Query('password') password?: string,
+    @Query('supplierId') supplierId?: string,
+  ) {
+    let acc = account || '';
+    let pwd = password || '';
+
+    if (supplierId) {
+      try {
+        const supplier = await this.prisma.dataloggerSupplier.findUnique({ where: { id: supplierId } });
+        if (supplier) {
+          acc = supplier.username || supplier.appId || acc;
+          pwd = supplier.password || supplier.appSecret || supplier.token || pwd;
+        }
+      } catch (e) { /* ignora */ }
+    }
+
+    return this.sofarService.diagnose(acc, pwd);
+  }
+
+  // POST /solarman/sofar/sync — Sincroniza plantas Sofar Cloud → cria/atualiza usinas no banco
+  @Post('sofar/sync')
+  async syncSofarPlants(@Body() body: { clientId?: string; supplierId?: string }) {
+    return this.solarmanService.syncSofarPlants(body.clientId, body.supplierId);
+  }
+
   // ─── Sincronização Unificada (Todos os Fornecedores Cloud) ────────────────
 
-  // POST /solarman/sync-all — Sincroniza Growatt, Solis, Solplanet, Solarman e GoodWe de uma só vez
+  // POST /solarman/sync-all — Sincroniza Growatt, Solis, Solplanet, Solarman, GoodWe e Sofar de uma só vez
   @Post('sync-all')
   async syncAllCloudPlants(@Body() body: { clientId?: string }) {
     return this.solarmanService.syncAllCloudPlants(body.clientId);
