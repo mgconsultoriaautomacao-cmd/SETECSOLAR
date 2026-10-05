@@ -843,8 +843,8 @@ export default function Noc() {
                 <Typography variant="h6" sx={{ fontWeight: 700, color: '#f8fafc', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <ShowChartIcon sx={{ color: '#f57c00' }} /> Histórico de Geração Diária (Últimos 30 Dias em kWh)
                 </Typography>
-                <Box sx={{ width: '100%', height: 320 }}>
-                  <ResponsiveContainer width="100%" height="100%">
+                <Box sx={{ width: '100%', height: 320, minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
                     <ComposedChart data={analyticsData.dailyHistory}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                       <XAxis dataKey="dayLabel" stroke="#64748b" fontSize={11} />
@@ -869,8 +869,8 @@ export default function Noc() {
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#f8fafc', mb: 2 }}>
                       🗓️ Evolução Mensal (kWh)
                     </Typography>
-                    <Box sx={{ width: '100%', height: 280 }}>
-                      <ResponsiveContainer width="100%" height="100%">
+                    <Box sx={{ width: '100%', height: 280, minWidth: 0 }}>
+                      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                         <BarChart data={analyticsData.monthlyHistory}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                           <XAxis dataKey="monthLabel" stroke="#64748b" fontSize={11} />

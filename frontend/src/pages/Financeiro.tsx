@@ -645,7 +645,8 @@ export default function Financeiro() {
                     Soma de contas liquidadas (Pagas / Recebidas) nos últimos 6 meses
                   </Typography>
                 </Box>
-                <ResponsiveContainer width="100%" height={260}>
+                <Box sx={{ width: '100%', height: 260, minWidth: 0 }}>
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={200}>
                   <AreaChart data={cashFlowData}>
                     <defs>
                       <linearGradient id="gradReceita" x1="0" y1="0" x2="0" y2="1">
@@ -668,7 +669,8 @@ export default function Financeiro() {
                     <Area type="monotone" dataKey="custo" name="Despesas" stroke="var(--color-danger)" strokeWidth={2} fill="url(#gradCusto)" />
                   </AreaChart>
                 </ResponsiveContainer>
-              </Paper>
+              </Box>
+            </Paper>
 
               {/* Todos os Lançamentos do Período */}
               <Paper className="p-4 rounded-2xl flex flex-col gap-3" sx={{ bgcolor: 'var(--color-bg-panel)', border: '1px solid var(--color-border)' }}>

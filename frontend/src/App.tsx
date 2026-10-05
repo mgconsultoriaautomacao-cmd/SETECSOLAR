@@ -765,8 +765,8 @@ SETEC Solar - Tecnologia e Eficiência em Energia Fotovoltaica
             </span>
           </div>
 
-          <div className="h-44 w-full">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-44 w-full min-w-0 min-h-[176px]">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={160}>
               {chartPeriod === 'DIARIO' ? (
                 <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                   <defs>

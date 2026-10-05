@@ -188,8 +188,8 @@ export default function Usinas() {
     setSupplierForm(prev => ({
       ...prev,
       type,
-      appId: '',
-      appSecret: '',
+      appId: (type === 'SOLARMAN_CLOUD' || type === 'SOFAR_CLOUD') ? '302407178765198' : '',
+      appSecret: (type === 'SOLARMAN_CLOUD' || type === 'SOFAR_CLOUD') ? '498bdb2be4a5c9f3a3d22332f28395c7' : '',
       token: '',
       apiKey: '',
       username: '',
@@ -1212,22 +1212,54 @@ export default function Usinas() {
                 <>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Usuário / E-mail da Conta Sofar Cloud"
+                      label="App ID (Solarman / Sofar OpenAPI)"
                       fullWidth
-                      value={supplierForm.username || ''}
-                      onChange={e => setSupplierForm({ ...supplierForm, username: e.target.value, appId: e.target.value })}
-                      placeholder="Ex: setec@email.com ou usuário Sofar"
+                      value={supplierForm.appId}
+                      onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
+                      placeholder="Ex: 302407178765198"
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Senha da Conta Sofar Cloud"
+                      label="App Secret (Solarman / Sofar OpenAPI)"
+                      type={showSecretMap['sofar_secret'] ? 'text' : 'password'}
+                      fullWidth
+                      value={supplierForm.appSecret}
+                      onChange={e => setSupplierForm({ ...supplierForm, appSecret: e.target.value })}
+                      placeholder="Ex: 498bdb2be4a5c9f3a3d22332f28395c7"
+                      slotProps={{
+                        inputLabel: { shrink: true },
+                        input: {
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton onClick={() => toggleShowSecret('sofar_secret')} edge="end" size="small">
+                                {showSecretMap['sofar_secret'] ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        },
+                      }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="E-mail / Usuário Sofar ou Solarman"
+                      fullWidth
+                      value={supplierForm.username || ''}
+                      onChange={e => setSupplierForm({ ...supplierForm, username: e.target.value })}
+                      placeholder="Ex: elionaldooliveiraleite2012@gmail.com"
+                      slotProps={{ inputLabel: { shrink: true } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="Senha Sofar ou Solarman"
                       type={showSecretMap['sofar_pwd'] ? 'text' : 'password'}
                       fullWidth
-                      value={supplierForm.password || supplierForm.token || ''}
-                      onChange={e => setSupplierForm({ ...supplierForm, password: e.target.value, token: e.target.value, appSecret: e.target.value })}
-                      placeholder="Senha da plataforma SofarCloud"
+                      value={supplierForm.password || ''}
+                      onChange={e => setSupplierForm({ ...supplierForm, password: e.target.value })}
+                      placeholder="Senha do aplicativo ou portal"
                       slotProps={{
                         inputLabel: { shrink: true },
                         input: {

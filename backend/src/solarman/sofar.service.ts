@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import axios from 'axios';
+import * as crypto from 'crypto';
 
 export interface SofarReading {
   powerNow: number | null;
@@ -24,7 +25,11 @@ export interface SofarStation {
   raw?: any;
 }
 
+const DEFAULT_SOLARMAN_APP_ID = '302407178765198';
+const DEFAULT_SOLARMAN_APP_SECRET = '498bdb2be4a5c9f3a3d22332f28395c7';
+
 const SOFAR_BASE_URLS = [
+  'https://globalapi.solarmanpv.com',
   'https://eu.sofarcloud.com/api',
   'https://api.sofarcloud.com',
   'https://global.sofarcloud.com/api',
@@ -33,32 +38,99 @@ const SOFAR_BASE_URLS = [
 @Injectable()
 export class SofarService {
   private readonly logger = new Logger(SofarService.name);
-  private tokenCache = new Map<string, { accessToken: string; expiresAt: number; baseUrl: string }>();
+  private tokenCache = new Map<string, { accessToken: string; expiresAt: number; baseUrl: string; isSolarmanOpenApi: boolean }>();
 
   /**
-   * Realiza login no Sofar Cloud / Sofar View.
+   * Realiza login no Sofar / Solarman Open API ou Sofar Cloud.
    */
   async login(
     account: string,
-    passwordOrSecret: string
-  ): Promise<{ accessToken: string; baseUrl: string } | null> {
+    passwordOrSecret: string,
+    appId?: string,
+    appSecret?: string
+  ): Promise<{ accessToken: string; baseUrl: string; isSolarmanOpenApi: boolean } | null> {
     if (!account || !passwordOrSecret) return null;
 
-    const cacheKey = `${account}_${passwordOrSecret}`;
+    const actualAppId = (appId && appId.trim() !== '' && appId !== account) ? appId.trim() : DEFAULT_SOLARMAN_APP_ID;
+    const actualAppSecret = (appSecret && appSecret.trim() !== '' && appSecret !== passwordOrSecret) ? appSecret.trim() : DEFAULT_SOLARMAN_APP_SECRET;
+
+    const cacheKey = `${account}_${passwordOrSecret}_${actualAppId}`;
     const cached = this.tokenCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      return { accessToken: cached.accessToken, baseUrl: cached.baseUrl };
+      return { accessToken: cached.accessToken, baseUrl: cached.baseUrl, isSolarmanOpenApi: cached.isSolarmanOpenApi };
     }
 
+    // 1. Tenta autenticação via Solarman Open API (padrão global Sofar/Solarman)
+    if (actualAppId && actualAppSecret) {
+      try {
+        const sha256Password = /^[a-f0-9]{64}$/i.test(passwordOrSecret)
+          ? passwordOrSecret
+          : crypto.createHash('sha256').update(passwordOrSecret).digest('hex');
+
+        this.logger.log(`Conectando ao Sofar via Solarman OpenAPI (globalapi.solarmanpv.com) para conta: ${account}...`);
+        
+        // Testa com email
+        let response = await axios.post(
+          `https://globalapi.solarmanpv.com/account/v1.0/token?appId=${actualAppId}&language=en`,
+          {
+            appSecret: actualAppSecret,
+            email: account,
+            password: sha256Password,
+          },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
+        );
+
+        if (response.data?.access_token) {
+          const accessToken = response.data.access_token;
+          this.logger.log(`✅ Login Sofar/Solarman OpenAPI efetuado com sucesso para ${account}`);
+          const resObj = {
+            accessToken,
+            expiresAt: Date.now() + 2 * 60 * 60 * 1000,
+            baseUrl: 'https://globalapi.solarmanpv.com',
+            isSolarmanOpenApi: true,
+          };
+          this.tokenCache.set(cacheKey, resObj);
+          return resObj;
+        }
+
+        // Se falhou, tenta com username
+        response = await axios.post(
+          `https://globalapi.solarmanpv.com/account/v1.0/token?appId=${actualAppId}&language=en`,
+          {
+            appSecret: actualAppSecret,
+            username: account,
+            password: sha256Password,
+          },
+          { headers: { 'Content-Type': 'application/json' }, timeout: 10000 }
+        );
+
+        if (response.data?.access_token) {
+          const accessToken = response.data.access_token;
+          this.logger.log(`✅ Login Sofar/Solarman OpenAPI efetuado com sucesso (via username) para ${account}`);
+          const resObj = {
+            accessToken,
+            expiresAt: Date.now() + 2 * 60 * 60 * 1000,
+            baseUrl: 'https://globalapi.solarmanpv.com',
+            isSolarmanOpenApi: true,
+          };
+          this.tokenCache.set(cacheKey, resObj);
+          return resObj;
+        }
+      } catch (err: any) {
+        this.logger.warn(`Tentativa via Solarman OpenAPI falhou: ${err.response?.data?.msg || err.message}`);
+      }
+    }
+
+    // 2. Fallback: Tenta endpoints diretos do Sofar Cloud legado
     const payload = {
       accountName: account,
       password: passwordOrSecret,
       expireTime: 18000,
     };
 
-    for (const baseUrl of SOFAR_BASE_URLS) {
+    for (const baseUrl of SOFAR_BASE_URLS.filter(u => u.includes('sofarcloud'))) {
       try {
-        this.logger.log(`Conectando ao Sofar Cloud (${baseUrl}) para conta: ${account}...`);
+        this.logger.log(`Conectando ao Sofar Cloud legado (${baseUrl}) para conta: ${account}...`);
         const response = await axios.post(
           `${baseUrl}/user/auth/he/login`,
           payload,
@@ -67,7 +139,7 @@ export class SofarService {
               'Content-Type': 'application/json',
               'Accept': 'application/json, text/plain, */*',
               'scene': 'eu',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0',
             },
             timeout: 10000,
           }
@@ -78,15 +150,14 @@ export class SofarService {
           const accessToken = data.data.accessToken;
           this.logger.log(`✅ Login Sofar Cloud efetuado com sucesso para ${account}`);
 
-          this.tokenCache.set(cacheKey, {
+          const resObj = {
             accessToken,
-            expiresAt: Date.now() + 2 * 60 * 60 * 1000, // 2 horas de cache
+            expiresAt: Date.now() + 2 * 60 * 60 * 1000,
             baseUrl,
-          });
-
-          return { accessToken, baseUrl };
-        } else {
-          this.logger.warn(`Resposta inesperada de login Sofar Cloud em ${baseUrl}: ${JSON.stringify(data)}`);
+            isSolarmanOpenApi: false,
+          };
+          this.tokenCache.set(cacheKey, resObj);
+          return resObj;
         }
       } catch (err: any) {
         this.logger.warn(`Tentativa de login Sofar Cloud falhou em ${baseUrl}: ${err.message}`);
@@ -104,24 +175,70 @@ export class SofarService {
       'Content-Type': 'application/json',
       'Accept': 'application/json, text/plain, */*',
       'authorization': `Bearer ${accessToken}`,
+      'Authorization': `bearer ${accessToken}`,
       'scene': 'eu',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/126.0.0.0',
     };
   }
 
   /**
-   * Lista todas as usinas (estações) com dados de geração e dispositivos cadastrados no Sofar Cloud.
+   * Lista todas as usinas (estações) com dados de geração e dispositivos cadastrados no Sofar.
    */
   async listStations(
     account: string,
-    passwordOrSecret: string
+    passwordOrSecret: string,
+    appId?: string,
+    appSecret?: string
   ): Promise<SofarStation[]> {
-    const loginRes = await this.login(account, passwordOrSecret);
+    const loginRes = await this.login(account, passwordOrSecret, appId, appSecret);
     if (!loginRes) return [];
 
-    const { accessToken, baseUrl } = loginRes;
+    const { accessToken, baseUrl, isSolarmanOpenApi } = loginRes;
     const headers = this.getAuthHeaders(accessToken);
 
+    if (isSolarmanOpenApi) {
+      try {
+        const res = await axios.post(
+          'https://globalapi.solarmanpv.com/station/v1.0/list',
+          { page: 1, size: 100 },
+          { headers, timeout: 12000 }
+        );
+
+        const stationList: any[] = res.data?.stationList || res.data?.data?.stationList || res.data?.data || [];
+        const stations: SofarStation[] = [];
+
+        for (const st of stationList) {
+          const id = String(st.id || st.stationId || '');
+          const name = st.name || st.stationName || `Sofar Plant ${id}`;
+          const capacityKwp = parseFloat(st.installedCapacity || st.capacity || '0');
+          const powerKw = parseFloat(st.generationPower || st.currPower || '0');
+          const energyTodayKwh = parseFloat(st.generationToday || st.todayEnergy || '0');
+          const energyTotalKwh = parseFloat(st.generationTotal || st.totalEnergy || '0');
+
+          stations.push({
+            id,
+            name,
+            powerKw: isNaN(powerKw) ? 0 : powerKw,
+            energyTodayKwh: isNaN(energyTodayKwh) ? 0 : energyTodayKwh,
+            energyTotalKwh: isNaN(energyTotalKwh) ? 0 : energyTotalKwh,
+            capacityKwp: isNaN(capacityKwp) ? 0 : capacityKwp,
+            latitude: st.locationLat ? parseFloat(st.locationLat) : null,
+            longitude: st.locationLng ? parseFloat(st.locationLng) : null,
+            address: st.locationAddress || st.address || '',
+            status: st.networkStatus === 'OFFLINE' ? 'OFFLINE' : (powerKw > 0 ? 'ONLINE' : 'ONLINE'),
+            inverterSns: [id],
+            raw: st,
+          });
+        }
+
+        return stations;
+      } catch (err: any) {
+        this.logger.error(`Erro ao listar usinas Sofar/Solarman OpenAPI: ${err.message}`);
+        return [];
+      }
+    }
+
+    // Sofar Cloud legado
     try {
       const res = await axios.post(
         `${baseUrl}/device/stationInfo/selectStationListPages`,
@@ -155,10 +272,10 @@ export class SofarService {
         stations.push({
           id,
           name,
-          powerKw,
-          energyTodayKwh,
-          energyTotalKwh,
-          capacityKwp,
+          powerKw: isNaN(powerKw) ? 0 : powerKw,
+          energyTodayKwh: isNaN(energyTodayKwh) ? 0 : energyTodayKwh,
+          energyTotalKwh: isNaN(energyTotalKwh) ? 0 : energyTotalKwh,
+          capacityKwp: isNaN(capacityKwp) ? 0 : capacityKwp,
           latitude: st.latitude ? parseFloat(st.latitude) : null,
           longitude: st.longitude ? parseFloat(st.longitude) : null,
           address: st.address || st.location || '',
@@ -176,28 +293,30 @@ export class SofarService {
   }
 
   /**
-   * Diagnóstico completo das credenciais da Sofar Cloud API.
+   * Diagnóstico completo das credenciais da Sofar API.
    */
   async diagnose(
     account: string,
-    passwordOrSecret: string
+    passwordOrSecret: string,
+    appId?: string,
+    appSecret?: string
   ): Promise<{
     credentials: any;
     loginResult: any;
     stationListResult: any;
     recommendation: string;
   }> {
-    this.logger.log(`🔍 Executando diagnóstico Sofar Cloud para conta: ${account}...`);
+    this.logger.log(`🔍 Executando diagnóstico Sofar para conta: ${account}...`);
 
     let loginRes: any = null;
     let stationListRes: any = null;
 
     try {
-      const loginObj = await this.login(account, passwordOrSecret);
+      const loginObj = await this.login(account, passwordOrSecret, appId, appSecret);
       if (loginObj) {
-        loginRes = { status: 'SUCCESS', baseUrl: loginObj.baseUrl };
+        loginRes = { status: 'SUCCESS', baseUrl: loginObj.baseUrl, mode: loginObj.isSolarmanOpenApi ? 'Solarman OpenAPI' : 'Sofar Cloud' };
 
-        const stations = await this.listStations(account, passwordOrSecret);
+        const stations = await this.listStations(account, passwordOrSecret, appId, appSecret);
         stationListRes = {
           total: stations.length,
           stations: stations.map(s => ({
@@ -212,8 +331,8 @@ export class SofarService {
       } else {
         loginRes = {
           status: 'AUTH_FAILED',
-          message: 'Não foi possível autenticar no portal Sofar Cloud.',
-          hint: 'Verifique se o usuário/e-mail e a senha no Sofar Cloud ou Sofar View estão corretos.',
+          message: 'Não foi possível autenticar na Sofar / Solarman API.',
+          hint: 'Verifique se o usuário/e-mail, senha e App ID / App Secret estão corretos.',
         };
       }
     } catch (e: any) {
@@ -231,8 +350,8 @@ export class SofarService {
       loginResult: loginRes,
       stationListResult: stationListRes,
       recommendation: isOk
-        ? `✅ Conexão Sofar Cloud 100% OK! ${stationListRes?.total || 0} usina(s) encontradas.`
-        : '⚠️ Falha na autenticação Sofar Cloud. Verifique as credenciais no portal Sofar.',
+        ? `✅ Conexão Sofar 100% OK! ${stationListRes?.total || 0} usina(s) encontradas.`
+        : '⚠️ Falha na autenticação Sofar. Verifique as credenciais no portal Solarman / Sofar.',
     };
   }
 
@@ -242,14 +361,51 @@ export class SofarService {
   async readUsinaFromCloud(
     stationIdOrSn: string,
     account: string,
-    passwordOrSecret: string
+    passwordOrSecret: string,
+    appId?: string,
+    appSecret?: string
   ): Promise<SofarReading | null> {
     if (!stationIdOrSn) return null;
 
     const cleanQuery = stationIdOrSn.trim().toLowerCase();
 
     try {
-      const stations = await this.listStations(account, passwordOrSecret);
+      const loginRes = await this.login(account, passwordOrSecret, appId, appSecret);
+      if (!loginRes) return null;
+
+      // Se for Solarman OpenAPI, tenta primeiro via station realTime
+      if (loginRes.isSolarmanOpenApi) {
+        const headers = this.getAuthHeaders(loginRes.accessToken);
+
+        if (/^\d+$/.test(cleanQuery)) {
+          try {
+            const rtRes = await axios.post(
+              'https://globalapi.solarmanpv.com/station/v1.0/realTime',
+              { stationId: Number(cleanQuery) },
+              { headers, timeout: 8000 }
+            );
+
+            if (rtRes.data?.success || rtRes.data?.generationPower !== undefined) {
+              const d = rtRes.data;
+              const powerKw = parseFloat(d.generationPower || d.usePower || '0') || null;
+              const genToday = parseFloat(d.generationToday || d.todayEnergy || '0') || null;
+              const genTotal = parseFloat(d.generationTotal || d.totalEnergy || '0') || null;
+
+              return {
+                powerNow: powerKw,
+                generationToday: genToday,
+                generationTotal: genTotal,
+                temperature: null,
+                status: (powerKw !== null && powerKw > 0) ? 'ONLINE' : 'ONLINE',
+              };
+            }
+          } catch (e: any) {
+            // Fallthrough to station list
+          }
+        }
+      }
+
+      const stations = await this.listStations(account, passwordOrSecret, appId, appSecret);
       if (!stations || stations.length === 0) return null;
 
       const matched = stations.find(s => {
