@@ -101,7 +101,7 @@ export default function Usinas() {
   const [syncResult, setSyncResult] = useState<any>(null);
   const [syncStep, setSyncStep] = useState<'config' | 'preview' | 'result'>('config');
   const [syncMenuAnchor, setSyncMenuAnchor] = useState<null | HTMLElement>(null);
-  const [syncProvider, setSyncProvider] = useState<'ALL' | 'GROWATT' | 'SOLIS' | 'SOLPLANET' | 'SOLARMAN' | 'GOODWE' | 'SOFAR'>('ALL');
+  const [syncProvider, setSyncProvider] = useState<'ALL' | 'GROWATT' | 'SOLIS' | 'SOLPLANET' | 'SOLARMAN' | 'GOODWE' | 'SOFAR' | 'AUXSOL'>('ALL');
 
   const handleOpenSyncMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
     setSyncMenuAnchor(event.currentTarget);
@@ -111,7 +111,7 @@ export default function Usinas() {
     setSyncMenuAnchor(null);
   };
 
-  const handleDirectSync = async (provider: 'ALL' | 'GROWATT' | 'SOLIS' | 'SOLPLANET' | 'SOLARMAN' | 'GOODWE' | 'SOFAR' = 'ALL') => {
+  const handleDirectSync = async (provider: 'ALL' | 'GROWATT' | 'SOLIS' | 'SOLPLANET' | 'SOLARMAN' | 'GOODWE' | 'SOFAR' | 'AUXSOL' = 'ALL') => {
     handleCloseSyncMenu();
     setSyncProvider(provider);
     setSyncModalOpen(true);
@@ -133,6 +133,10 @@ export default function Usinas() {
     } else if (provider === 'SOFAR') {
       endpoint = '/solarman/sofar/sync';
       const supp = suppliers.find(s => s.type === 'SOFAR_CLOUD' || s.type === 'SOFAR');
+      supplierId = supp?.id;
+    } else if (provider === 'AUXSOL') {
+      endpoint = '/solarman/auxsol/sync';
+      const supp = suppliers.find(s => s.type === 'AUXSOL_CLOUD' || s.type === 'AUXSOL');
       supplierId = supp?.id;
     } else if (provider === 'SOLIS') {
       endpoint = '/solarman/solis/sync';
@@ -487,6 +491,9 @@ export default function Usinas() {
             </MenuItem>
             <MenuItem onClick={() => handleDirectSync('SOFAR')}>
               🔴 Sincronizar Sofar Solar Cloud
+            </MenuItem>
+            <MenuItem onClick={() => handleDirectSync('AUXSOL')}>
+              🟢 Sincronizar Auxsol Cloud
             </MenuItem>
             <MenuItem onClick={() => handleDirectSync('SOLIS')}>
               🟡 Sincronizar SolisCloud (Ginlong Solis)
@@ -1081,6 +1088,7 @@ export default function Usinas() {
                     <MenuItem value="GROWATT_CLOUD">Growatt OpenAPI Cloud</MenuItem>
                     <MenuItem value="GOODWE_CLOUD">GoodWe SEMS+ Portal API</MenuItem>
                     <MenuItem value="SOFAR_CLOUD">Sofar Solar Cloud API</MenuItem>
+                    <MenuItem value="AUXSOL_CLOUD">Auxsol Cloud API</MenuItem>
                     <MenuItem value="SOLIS_CLOUD">SolisCloud Open API (Ginlong Solis)</MenuItem>
                     <MenuItem value="SOLARMAN_CLOUD">Solarman OpenAPI Cloud</MenuItem>
                     <MenuItem value="SOLPLANET_CLOUD">Solplanet Cloud API</MenuItem>
@@ -1208,11 +1216,11 @@ export default function Usinas() {
                 </>
               )}
 
-              {supplierForm.type === 'SOFAR_CLOUD' && (
+              {(supplierForm.type === 'SOFAR_CLOUD' || supplierForm.type === 'AUXSOL_CLOUD') && (
                 <>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="App ID (Solarman / Sofar OpenAPI)"
+                      label="App ID (Solarman / OpenAPI)"
                       fullWidth
                       value={supplierForm.appId}
                       onChange={e => setSupplierForm({ ...supplierForm, appId: e.target.value })}
@@ -1222,7 +1230,7 @@ export default function Usinas() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="App Secret (Solarman / Sofar OpenAPI)"
+                      label="App Secret (Solarman / OpenAPI)"
                       type={showSecretMap['sofar_secret'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.appSecret}
@@ -1244,17 +1252,17 @@ export default function Usinas() {
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="E-mail / Usuário Sofar ou Solarman"
+                      label={`E-mail / Usuário ${supplierForm.type === 'AUXSOL_CLOUD' ? 'Auxsol' : 'Sofar ou Solarman'}`}
                       fullWidth
                       value={supplierForm.username || ''}
                       onChange={e => setSupplierForm({ ...supplierForm, username: e.target.value })}
-                      placeholder="Ex: elionaldooliveiraleite2012@gmail.com"
+                      placeholder="Ex: seuemail@dominio.com"
                       slotProps={{ inputLabel: { shrink: true } }}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
-                      label="Senha Sofar ou Solarman"
+                      label={`Senha ${supplierForm.type === 'AUXSOL_CLOUD' ? 'Auxsol' : 'Sofar ou Solarman'}`}
                       type={showSecretMap['sofar_pwd'] ? 'text' : 'password'}
                       fullWidth
                       value={supplierForm.password || ''}
@@ -1492,6 +1500,8 @@ export default function Usinas() {
             ? 'Sincronizar Usinas — GoodWe SEMS+'
             : syncProvider === 'SOFAR'
             ? 'Sincronizar Usinas — Sofar Solar Cloud'
+            : syncProvider === 'AUXSOL'
+            ? 'Sincronizar Usinas — Auxsol Cloud'
             : syncProvider === 'SOLIS'
             ? 'Sincronizar Usinas — SolisCloud (Ginlong Solis)'
             : syncProvider === 'SOLPLANET'
@@ -1509,11 +1519,13 @@ export default function Usinas() {
                 <CircularProgress color="primary" />
                 <Typography sx={{ color: '#94a3b8' }}>
                   {syncProvider === 'ALL'
-                    ? 'Buscando plantas e dispositivos em todos os portais Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe, Sofar)...'
+                    ? 'Buscando plantas e dispositivos em todos os portais Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe, Sofar, Auxsol)...'
                     : syncProvider === 'GOODWE'
                     ? 'Buscando plantas e dispositivos no portal GoodWe SEMS+...'
                     : syncProvider === 'SOFAR'
                     ? 'Buscando plantas e dispositivos no portal Sofar Solar Cloud...'
+                    : syncProvider === 'AUXSOL'
+                    ? 'Buscando plantas e dispositivos no portal Auxsol Cloud...'
                     : syncProvider === 'SOLIS'
                     ? 'Buscando plantas e dispositivos na SolisCloud API...'
                     : syncProvider === 'SOLPLANET'

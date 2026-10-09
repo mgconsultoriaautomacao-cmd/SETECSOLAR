@@ -993,6 +993,34 @@ export class SolarmanService implements OnModuleInit {
           errorMessage: `Sem resposta da Sofar Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
         };
       }
+
+      if (supplier.type === 'AUXSOL_CLOUD' || supplier.type === 'AUXSOL') {
+        const account = supplier.username || supplier.appId || '';
+        const secret = supplier.password || supplier.appSecret || supplier.token || '';
+        const auxsolData = await this.sofarService.readUsinaFromCloud(cleanDatalogger, account, secret, supplier.appId, supplier.appSecret);
+        if (auxsolData) {
+          return {
+            usinaId, usinaNome, deviceSn: cleanDatalogger,
+            ipAddress: 'Auxsol Cloud',
+            powerNow: auxsolData.powerNow,
+            generationToday: auxsolData.generationToday,
+            generationTotal: auxsolData.generationTotal,
+            gridVoltage: null, gridFrequency: null,
+            temperature: auxsolData.temperature,
+            dcPower: null,
+            status: auxsolData.status === 'ONLINE' ? 'ONLINE' : 'OFFLINE',
+            lastUpdate: new Date(),
+          };
+        }
+        return {
+          usinaId, usinaNome, deviceSn: cleanDatalogger,
+          ipAddress: 'Auxsol Cloud',
+          powerNow: null, generationToday: null, generationTotal: null,
+          gridVoltage: null, gridFrequency: null, temperature: null, dcPower: null,
+          status: 'OFFLINE', lastUpdate: new Date(),
+          errorMessage: `Sem resposta da Auxsol Cloud API. Verifique as credenciais do fornecedor "${supplier.name}".`,
+        };
+      }
     }
 
 
@@ -2648,6 +2676,162 @@ export class SolarmanService implements OnModuleInit {
     return result;
   }
 
+  // ─── Auxsol Cloud: Sincronização de plantas → Usinas no banco ───────────
+  async syncAuxsolPlants(clientId?: string, supplierId?: string): Promise<{
+    created: number;
+    skipped: number;
+    updated: number;
+    errors: string[];
+    details: { name: string; deviceSn: string; action: string }[];
+  }> {
+    const result = {
+      created: 0,
+      skipped: 0,
+      updated: 0,
+      errors: [] as string[],
+      details: [] as { name: string; deviceSn: string; action: string }[],
+    };
+
+    let supplier: any = null;
+    if (supplierId) {
+      supplier = await this.dbGetSupplier(supplierId);
+    }
+    if (!supplier) {
+      supplier = await this.dbGetSupplier(undefined, 'AUXSOL_CLOUD');
+    }
+    if (!supplier) {
+      supplier = await this.dbGetSupplier(undefined, 'AUXSOL');
+    }
+    if (!supplier) {
+      result.errors.push('Nenhum fornecedor Auxsol Cloud configurado. Cadastre as credenciais do Auxsol no painel de fornecedores.');
+      return result;
+    }
+
+    const account = supplier.username || supplier.appId;
+    const secret = supplier.password || supplier.appSecret || supplier.token;
+    const appId = supplier.appId || '302407178765198';
+    const appSecret = supplier.appSecret || '498bdb2be4a5c9f3a3d22332f28395c7';
+
+    if (!account || !secret) {
+      result.errors.push('Usuário ou senha não informados para o fornecedor Auxsol.');
+      return result;
+    }
+
+    try {
+      const stations = await this.sofarService.listStations(account, secret, appId, appSecret);
+      if (!stations || stations.length === 0) {
+        result.errors.push('Nenhuma usina encontrada na conta Auxsol Cloud ou erro de autenticação.');
+        return result;
+      }
+
+      const existingUsinas = await this.dbGetUsinas();
+
+      const getOrCreateClient = async (clientName: string) => {
+        let found = await this.dbGetClient(clientId, clientName);
+        if (!found) {
+          found = await this.dbCreateClient({
+            name: clientName,
+            email: `auxsol_${Date.now()}@local`,
+            document: '00000000000',
+            phone: '00000000000',
+            whatsapp: '00000000000',
+            zipCode: '00000000',
+            address: 'Importado via Auxsol Cloud',
+            city: 'Importado',
+            state: 'RN',
+            installationDate: new Date(),
+          });
+        }
+        return found?.id;
+      };
+
+      for (const st of stations) {
+        const stationName = st.name || `Auxsol Plant ${st.id}`;
+        const deviceSn = st.inverterSns[0] || st.id;
+
+        const existing = existingUsinas.find(u =>
+          u.datalogger === deviceSn ||
+          u.datalogger === st.id ||
+          st.inverterSns.includes(u.datalogger) ||
+          u.name.toLowerCase() === stationName.toLowerCase()
+        );
+
+        if (existing) {
+          try {
+            const clientTargetId = await getOrCreateClient(stationName);
+            await this.dbUpdateUsina(existing.id, {
+              clientId: clientTargetId,
+              datalogger: deviceSn,
+              dataloggerSupplierId: supplier?.id,
+              powerNow: st.powerKw > 0 ? st.powerKw : existing.powerNow,
+              generationToday: st.energyTodayKwh > 0 ? st.energyTodayKwh : existing.generationToday,
+              generationTotal: st.energyTotalKwh > 0 ? st.energyTotalKwh : existing.generationTotal,
+              capacityKwp: st.capacityKwp || existing.capacityKwp,
+              address: st.address || existing.address,
+              gpsLatitude: st.latitude ?? existing.gpsLatitude,
+              gpsLongitude: st.longitude ?? existing.gpsLongitude,
+              status: (st.powerKw > 0 || st.status === 1 || st.status === 'ONLINE') ? 'ONLINE' : 'OFFLINE',
+              readingLastUpdate: new Date(),
+            });
+            result.updated++;
+            result.details.push({ name: stationName, deviceSn, action: 'Atualizada (Auxsol Cloud)' });
+          } catch (e) {
+            result.skipped++;
+            result.details.push({ name: stationName, deviceSn, action: 'Já existe' });
+          }
+          continue;
+        }
+
+        try {
+          const clientTargetId = await getOrCreateClient(stationName);
+          const cap = Number(st.capacityKwp || 5.0);
+
+          const createdUsina = await this.dbCreateUsina({
+            name: stationName,
+            clientId: clientTargetId,
+            capacityKwp: cap,
+            inverterCapacity: cap,
+            moduleCount: Math.round(cap * 2),
+            manufacturer: 'Auxsol',
+            model: 'Auxsol Inverter',
+            utilityCompany: '',
+            estimatedKwh: cap * 130,
+            paybackYears: 4.0,
+            installationDate: new Date(),
+            status: (st.powerKw > 0 || st.status === 1 || st.status === 'ONLINE') ? 'ONLINE' : 'OFFLINE',
+            datalogger: deviceSn,
+            city: 'Importado',
+            state: 'RN',
+            address: st.address || 'Importado Auxsol Cloud',
+            dataloggerSupplierId: supplier?.id,
+            powerNow: st.powerKw > 0 ? st.powerKw : null,
+            generationToday: st.energyTodayKwh > 0 ? st.energyTodayKwh : null,
+            generationTotal: st.energyTotalKwh > 0 ? st.energyTotalKwh : null,
+            readingLastUpdate: new Date(),
+            gpsLatitude: st.latitude,
+            gpsLongitude: st.longitude,
+          });
+          if (createdUsina) {
+            result.created++;
+            result.details.push({ name: stationName, deviceSn, action: 'Criada (Auxsol Cloud)' });
+          } else {
+            result.errors.push(`Erro ao salvar usina Auxsol "${stationName}" no banco de dados.`);
+          }
+        } catch (err: any) {
+          result.errors.push(`Erro ao criar usina Auxsol "${stationName}": ${err.message}`);
+        }
+      }
+    } catch (err: any) {
+      result.errors.push(`Erro ao consultar Auxsol Cloud API: ${err.message}`);
+    }
+
+    if (result.created > 0 || result.updated > 0) {
+      this.pollAll().catch(err => this.logger.warn(`Erro no pollAll pós-sync Auxsol: ${err.message}`));
+    }
+
+    return result;
+  }
+
   // ─── Sincronização Unificada de Todos os Fornecedores Cloud ─────────────────
   async syncAllCloudPlants(clientId?: string): Promise<{
     created: number;
@@ -2656,7 +2840,7 @@ export class SolarmanService implements OnModuleInit {
     errors: string[];
     details: { name: string; deviceSn: string; action: string }[];
   }> {
-    this.logger.log('🌐 Iniciando Sincronização Unificada PARALELA de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe, Sofar)...');
+    this.logger.log('🌐 Iniciando Sincronização Unificada PARALELA de Todos os Fornecedores Cloud (Growatt, Solis, Solplanet, Solarman, GoodWe, Sofar, Auxsol)...');
 
     const emptyRes = { created: 0, skipped: 0, updated: 0, errors: [] as string[], details: [] as any[] };
 
@@ -2667,6 +2851,7 @@ export class SolarmanService implements OnModuleInit {
       this.syncSolarmanPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
       this.syncGoodWePlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
       this.syncSofarPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
+      this.syncAuxsolPlants(clientId).catch(err => ({ ...emptyRes, errors: [err.message] })),
     ]);
 
     let totalCreated = 0;
@@ -3031,6 +3216,34 @@ export class SolarmanService implements OnModuleInit {
               } else {
                 item.status = 'AUTH_FAILED';
                 item.message = 'Falha ao autenticar no Sofar / Solarman API. Verifique usuário e senha.';
+              }
+            }
+          }
+        }
+
+        // ─── Auxsol Cloud ───────────────────────────────────────────────
+        else if (supplier.type === 'AUXSOL_CLOUD' || supplier.type === 'AUXSOL') {
+          const account = supplier.username || supplier.appId || '';
+          const secret = supplier.password || supplier.appSecret || supplier.token || '';
+          const appId = supplier.appId || '302407178765198';
+          const appSecret = supplier.appSecret || '498bdb2be4a5c9f3a3d22332f28395c7';
+
+          if (!account || !secret) {
+            item.status = 'NOT_CONFIGURED';
+            item.message = 'Credenciais Auxsol (Usuário/Senha) não configuradas no fornecedor.';
+          } else {
+            const stations = await this.sofarService.listStations(account, secret, appId, appSecret);
+            if (stations && stations.length > 0) {
+              item.status = 'OK';
+              item.message = `Conectado Auxsol Cloud com sucesso. ${stations.length} usina(s) ativa(s).`;
+            } else {
+              const loginObj = await this.sofarService.login(account, secret, appId, appSecret);
+              if (loginObj) {
+                item.status = 'OK';
+                item.message = 'Autenticação Auxsol Cloud OK.';
+              } else {
+                item.status = 'AUTH_FAILED';
+                item.message = 'Falha ao autenticar no Auxsol Cloud API. Verifique usuário e senha.';
               }
             }
           }

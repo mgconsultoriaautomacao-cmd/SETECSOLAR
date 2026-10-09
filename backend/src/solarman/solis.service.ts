@@ -250,7 +250,8 @@ export class SolisService {
         const pac = parseFloat(stDetail.power ?? stDetail.pac ?? '0');
         const etoday = parseFloat(stDetail.dayEnergy ?? stDetail.eToday ?? stDetail.etoday ?? '0');
         const emonth = parseFloat(stDetail.monthEnergy ?? stDetail.eMonth ?? stDetail.emonth ?? '0');
-        const etotal = parseFloat(stDetail.allEnergy ?? stDetail.totalEnergy ?? stDetail.eTotal ?? '0');
+        const rawTotal = parseFloat(stDetail.allEnergy ?? stDetail.totalEnergy ?? stDetail.eTotal ?? '0');
+        const etotal = (stDetail.allEnergyStr === 'MWh' || rawTotal < 500) && rawTotal > 0 ? rawTotal * 1000 : rawTotal;
         const dayIncome = parseFloat(stDetail.dayIncome ?? stDetail.dayInCome ?? '0');
         const monthIncome = parseFloat(stDetail.monthIncome ?? stDetail.monthInCome ?? '0');
         const temp = parseFloat(stDetail.temperature ?? '0');
@@ -276,7 +277,7 @@ export class SolisService {
           const etoday = parseFloat(inv.eToday ?? inv.etoday ?? inv.dayEnergy ?? '0');
           const emonth = parseFloat(inv.eMonth ?? inv.emonth ?? inv.monthEnergy ?? '0');
           const rawTotal = parseFloat(inv.allEnergyOriginal ?? inv.eTotal ?? inv.etotal ?? inv.totalEnergy ?? '0');
-          const etotal = (inv.eTotalStr === 'MWh' || inv.etotalStr === 'MWh') && rawTotal < 1000 ? rawTotal * 1000 : rawTotal;
+          const etotal = (inv.eTotalStr === 'MWh' || inv.etotalStr === 'MWh' || rawTotal < 500) && rawTotal > 0 ? rawTotal * 1000 : rawTotal;
 
           return {
             powerNow: isNaN(pac) ? 0 : pac,
