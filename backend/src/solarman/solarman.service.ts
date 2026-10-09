@@ -1872,11 +1872,7 @@ export class SolarmanService implements OnModuleInit {
     }
 
     if (result.created > 0 || result.updated > 0) {
-      try {
-        await this.pollAll();
-      } catch (err: any) {
-        this.logger.error(`Erro ao rodar polling pós-sincronização Solplanet: ${err.message}`);
-      }
+      this.pollAll().catch(err => this.logger.warn(`Erro no pollAll pós-sync Solplanet: ${err.message}`));
     }
 
     return result;
@@ -2190,7 +2186,7 @@ export class SolarmanService implements OnModuleInit {
     }
 
     if (result.created > 0 || result.updated > 0) {
-      await this.pollAll();
+      this.pollAll().catch(err => this.logger.warn(`Erro no pollAll pós-sync Solis: ${err.message}`));
     }
 
     return result;
@@ -2337,7 +2333,7 @@ export class SolarmanService implements OnModuleInit {
     }
 
     if (result.created > 0 || result.updated > 0) {
-      await this.pollAll();
+      this.pollAll().catch(err => this.logger.warn(`Erro no pollAll pós-sync Solarman: ${err.message}`));
     }
 
     return result;
@@ -2490,7 +2486,7 @@ export class SolarmanService implements OnModuleInit {
     }
 
     if (result.created > 0 || result.updated > 0) {
-      await this.pollAll();
+      this.pollAll().catch(err => this.logger.warn(`Erro no pollAll pós-sync GoodWe: ${err.message}`));
     }
 
     return result;
@@ -2646,7 +2642,7 @@ export class SolarmanService implements OnModuleInit {
     }
 
     if (result.created > 0 || result.updated > 0) {
-      await this.pollAll();
+      this.pollAll().catch(err => this.logger.warn(`Erro no pollAll pós-sync Sofar: ${err.message}`));
     }
 
     return result;
